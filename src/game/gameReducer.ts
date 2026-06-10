@@ -25,10 +25,12 @@ export type GameAction =
       currentPlayerIndex: number
       lastRoll: DieValue | null
       winnerId: number | null
+      turnCount: number
     }
   | { type: 'BEGIN_ROLL'; roll: DieValue }
   | { type: 'BEGIN_MOVE' }
   | { type: 'COMMIT_TURN'; resolution: TurnResolution }
+  | { type: 'FORFEIT_WIN'; winnerId: number }
   | { type: 'RESET' }
 
 export const initialState: GameState = {
@@ -37,6 +39,8 @@ export const initialState: GameState = {
   phase: 'setup',
   lastRoll: null,
   winnerId: null,
+  winReason: null,
+  turnCount: 0,
 }
 
 export function gameReducer(state: GameState, action: GameAction): GameState {
@@ -79,6 +83,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         phase: action.winnerId != null ? 'won' : 'idle',
         lastRoll: action.lastRoll,
         winnerId: action.winnerId,
+        winReason: action.winnerId != null ? 'goal' : null,
+        turnCount: action.turnCount,
       }
     }
 
@@ -93,16 +99,32 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const players = state.players.map((p) =>
         p.id === state.currentPlayerIndex ? { ...p, position: resolution.finalPos } : p,
       )
+      const turnCount = state.turnCount + 1
 
       if (resolution.isWin) {
-        return { ...state, players, phase: 'won', winnerId: state.currentPlayerIndex }
+        return {
+          ...state,
+          players,
+          phase: 'won',
+          winnerId: state.currentPlayerIndex,
+          winReason: 'goal',
+          turnCount,
+        }
       }
 
       const nextIndex = resolution.extraTurn
         ? state.currentPlayerIndex
         : (state.currentPlayerIndex + 1) % state.players.length
 
-      return { ...state, players, phase: 'idle', currentPlayerIndex: nextIndex }
+      return { ...state, players, phase: 'idle', currentPlayerIndex: nextIndex, turnCount }
+    }
+
+    case 'FORFEIT_WIN': {
+      // Every other player left the room: the last one standing wins. Ignored
+      // before the match starts or once it is already decided.
+      if (state.phase === 'setup' || state.phase === 'won') return state
+      if (!state.players.some((p) => p.id === action.winnerId)) return state
+      return { ...state, phase: 'won', winnerId: action.winnerId, winReason: 'forfeit' }
     }
 
     case 'RESET':

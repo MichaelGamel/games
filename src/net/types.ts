@@ -41,10 +41,10 @@ export interface StartPlayer {
 }
 
 /**
- * A snapshot of a running match, handed to a late joiner the host has approved.
- * Carries every seated player (with `clientId`, so the joiner can locate its own
- * seat) plus the live board state, so the newcomer can render the match mid-game
- * even though it never received the original `start` broadcast.
+ * A snapshot of a running match — handed to a late joiner the host has
+ * approved, and to any client that detected it missed a message (resync).
+ * Carries every seated player (with `clientId`, so the receiver can locate its
+ * own seat) plus the live board state.
  */
 export interface RunningSnapshot {
   /** Seated players in turn order, including the newly added one (at position 0). */
@@ -54,18 +54,48 @@ export interface RunningSnapshot {
   currentPlayerIndex: number
   lastRoll: DieValue | null
   winnerId: number | null
+  /** Committed turns so far — the sync sequence number. */
+  turnCount: number
+  /** Which match (start/restart generation) this snapshot belongs to. */
+  matchId: number
 }
 
-/** Messages broadcast between the clients in a room. */
+/**
+ * Messages broadcast between the clients in a room.
+ *
+ * There is no server, and broadcast delivery is fire-and-forget, so the
+ * protocol must self-heal: every `turn` carries a sequence number (`seq`) and a
+ * match generation (`matchId`); clients periodically gossip their settled state
+ * via `sync-ping`. Any client that detects it is behind (a gap in `seq`, a
+ * newer `matchId`, or a ping it can't reconcile) sends `sync-request`, and any
+ * settled, up-to-date client answers with an authoritative `sync-state`
+ * snapshot. This is what un-sticks a game after a dropped message (e.g. a
+ * backgrounded tab whose connection silently lapsed).
+ */
 export type RoomMessage =
-  | { event: 'start'; players: StartPlayer[] }
-  | { event: 'turn'; resolution: TurnResolution }
+  | { event: 'start'; players: StartPlayer[]; matchId: number }
+  | { event: 'turn'; resolution: TurnResolution; seq: number; matchId: number }
   | { event: 'reset' }
   // Host approved a late joiner: existing clients append `player`; the joiner
   // named in `player` initializes its whole game from `snapshot`.
   | { event: 'add-player'; player: StartPlayer; snapshot: RunningSnapshot }
   // Host declined a late joiner's request (addressed by clientId).
   | { event: 'reject-join'; clientId: string }
+  // Periodic heartbeat of this client's settled game state.
+  | {
+      event: 'sync-ping'
+      clientId: string
+      role: Role
+      matchId: number
+      seq: number
+      currentPlayerIndex: number
+      positions: number[]
+      winnerId: number | null
+    }
+  // "I'm behind — somebody send me the current state."
+  | { event: 'sync-request'; clientId: string }
+  // Authoritative state for one lagging client (addressed by clientId).
+  | { event: 'sync-state'; toClientId: string; fromHost: boolean; snapshot: RunningSnapshot }
 
 export type RoomStatus = 'connecting' | 'connected' | 'error'
 

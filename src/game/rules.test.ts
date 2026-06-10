@@ -157,6 +157,68 @@ describe('gameReducer', () => {
     })
     expect(next.phase).toBe('won')
     expect(next.winnerId).toBe(0)
+    expect(next.winReason).toBe('goal')
+  })
+
+  it('counts every committed turn (the online sync sequence number)', () => {
+    let s = started
+    expect(s.turnCount).toBe(0)
+    s = gameReducer(s, { type: 'COMMIT_TURN', resolution: resolveTurn(0, 3) })
+    expect(s.turnCount).toBe(1)
+    s = gameReducer(s, { type: 'COMMIT_TURN', resolution: resolveTurn(0, 6) })
+    expect(s.turnCount).toBe(2) // extra turns count too — one commit per roll
+    expect(gameReducer(s, { type: 'RESET' }).turnCount).toBe(0)
+  })
+
+  it('restores turnCount from a snapshot', () => {
+    const s = gameReducer(initialState, {
+      type: 'LOAD_SNAPSHOT',
+      players: [
+        { name: 'A', color: '#f00', position: 10 },
+        { name: 'B', color: '#00f', position: 4 },
+      ],
+      currentPlayerIndex: 1,
+      lastRoll: 4,
+      winnerId: null,
+      turnCount: 7,
+    })
+    expect(s.turnCount).toBe(7)
+    expect(s.phase).toBe('idle')
+  })
+})
+
+describe('gameReducer — forfeit win (last player standing)', () => {
+  const started = gameReducer(initialState, {
+    type: 'START_GAME',
+    players: [
+      { name: 'A', color: '#f00' },
+      { name: 'B', color: '#00f' },
+    ],
+  })
+
+  it('grants the win to the remaining player', () => {
+    const next = gameReducer(started, { type: 'FORFEIT_WIN', winnerId: 1 })
+    expect(next.phase).toBe('won')
+    expect(next.winnerId).toBe(1)
+    expect(next.winReason).toBe('forfeit')
+  })
+
+  it('is ignored before the match starts', () => {
+    expect(gameReducer(initialState, { type: 'FORFEIT_WIN', winnerId: 0 })).toBe(initialState)
+  })
+
+  it('never overrides a match that is already won', () => {
+    const won = gameReducer(started, {
+      type: 'COMMIT_TURN',
+      resolution: resolveTurn(99, 1),
+    })
+    const next = gameReducer(won, { type: 'FORFEIT_WIN', winnerId: 1 })
+    expect(next.winnerId).toBe(0)
+    expect(next.winReason).toBe('goal')
+  })
+
+  it('is ignored for an unknown player id', () => {
+    expect(gameReducer(started, { type: 'FORFEIT_WIN', winnerId: 5 })).toBe(started)
   })
 })
 

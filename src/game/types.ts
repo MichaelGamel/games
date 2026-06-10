@@ -34,12 +34,22 @@ export interface Player {
  */
 export type Phase = 'setup' | 'idle' | 'rolling' | 'moving' | 'won'
 
+/** How the match ended: reaching the final cell, or everyone else leaving. */
+export type WinReason = 'goal' | 'forfeit'
+
 export interface GameState {
   players: Player[]
   currentPlayerIndex: number
   phase: Phase
   lastRoll: DieValue | null
   winnerId: number | null
+  winReason: WinReason | null
+  /**
+   * Number of committed turns since the match started. Acts as the sequence
+   * number for online play: every client commits the same turns in the same
+   * order, so equal `turnCount` ⇒ identical state.
+   */
+  turnCount: number
 }
 
 /**

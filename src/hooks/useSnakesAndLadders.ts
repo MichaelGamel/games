@@ -31,10 +31,17 @@ import { useSound } from './useSound'
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
 export interface GameNetHooks {
-  /** Fired after a *local* roll so it can be broadcast to the opponent. */
-  onLocalTurn?: (resolution: TurnResolution) => void
+  /**
+   * Fired after a *local* roll so it can be broadcast to the opponent.
+   * `seq` is the 1-based turn number this roll will commit as — receivers use
+   * it to detect dropped or duplicated turns.
+   */
+  onLocalTurn?: (resolution: TurnResolution, seq: number) => void
   /** Fired when this client starts/restarts the game (host broadcasts it). */
   onStart?: (players: PlayerSetup[]) => void
+  /** Fired when a remote turn arrives out of order — we missed one or more
+   *  turns and need a fresh state snapshot from another client. */
+  onOutOfSync?: () => void
 }
 
 export interface UseGameOptions {
@@ -57,6 +64,13 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
   // Keep net hooks fresh without rebuilding callbacks.
   const hooksRef = useRef(hooks)
   hooksRef.current = hooks
+  // Sequence number of the latest turn accepted (committed, queued, or
+  // animating). Compared against state.turnCount (committed only) to tell
+  // whether this client is fully settled.
+  const lastSeqRef = useRef(0)
+  // Synchronous re-entrancy guard for `roll`: the phase only leaves 'idle' on
+  // the next render, so a double-tap could otherwise fire two turns.
+  const rollingRef = useRef(false)
 
   const timings = useMemo(
     () =>
@@ -133,16 +147,36 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
   const roll = useCallback(async () => {
     const snap = stateRef.current
     if (snap.phase !== 'idle') return
+    if (rollingRef.current) return
+    // Never roll over remote turns that are still animating or queued.
+    if (drainingRef.current || queueRef.current.length > 0) return
     if (controlsPlayer !== 'all' && controlsPlayer !== snap.currentPlayerIndex) return
 
     const player = snap.players[snap.currentPlayerIndex]
-    const resolution = resolveTurn(player.position, rollDie())
-    hooksRef.current?.onLocalTurn?.(resolution)
-    await executeTurn(resolution)
+    if (!player) return
+    rollingRef.current = true
+    try {
+      const resolution = resolveTurn(player.position, rollDie())
+      const seq = ++lastSeqRef.current
+      hooksRef.current?.onLocalTurn?.(resolution, seq)
+      await executeTurn(resolution)
+    } finally {
+      rollingRef.current = false
+    }
   }, [controlsPlayer, executeTurn])
 
   const applyRemoteTurn = useCallback(
-    (resolution: TurnResolution) => {
+    (resolution: TurnResolution, seq: number) => {
+      const expected = lastSeqRef.current + 1
+      // Already have this turn (duplicate delivery): drop it.
+      if (seq < expected) return
+      // A turn was lost in transit. Don't apply this one (it would corrupt the
+      // state) — ask the room for a full snapshot instead.
+      if (seq > expected) {
+        hooksRef.current?.onOutOfSync?.()
+        return
+      }
+      lastSeqRef.current = seq
       queueRef.current.push(resolution)
       void drainQueue()
     },
@@ -152,6 +186,7 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
   const startGame = useCallback((players: PlayerSetup[]) => {
     runIdRef.current++
     queueRef.current = []
+    lastSeqRef.current = 0
     setActiveMove(null)
     dispatch({ type: 'START_GAME', players })
     hooksRef.current?.onStart?.(players)
@@ -160,6 +195,7 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
   const applyRemoteStart = useCallback((players: PlayerSetup[]) => {
     runIdRef.current++
     queueRef.current = []
+    lastSeqRef.current = 0
     setActiveMove(null)
     dispatch({ type: 'START_GAME', players })
   }, [])
@@ -170,25 +206,62 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
     dispatch({ type: 'ADD_PLAYER', player })
   }, [])
 
-  // Initialize a freshly-approved late joiner from the host's running snapshot.
+  // Replace the whole game with an authoritative running snapshot. Used by a
+  // freshly-approved late joiner — and by any client recovering from a missed
+  // message (resync).
   const loadSnapshot = useCallback(
     (snapshot: {
       players: PlayerSnapshot[]
       currentPlayerIndex: number
       lastRoll: DieValue | null
       winnerId: number | null
+      turnCount: number
     }) => {
       runIdRef.current++
       queueRef.current = []
+      lastSeqRef.current = snapshot.turnCount
       setActiveMove(null)
       dispatch({ type: 'LOAD_SNAPSHOT', ...snapshot })
     },
     [],
   )
 
+  // Last player standing: everyone else left the room, so `winnerId` wins now.
+  const forfeitWin = useCallback(
+    (winnerId: number) => {
+      const snap = stateRef.current
+      if (snap.phase === 'setup' || snap.phase === 'won') return
+      runIdRef.current++
+      queueRef.current = []
+      lastSeqRef.current = snap.turnCount
+      setActiveMove(null)
+      dispatch({ type: 'FORFEIT_WIN', winnerId })
+      sound.playWin()
+    },
+    [sound],
+  )
+
+  /**
+   * Live sync probe for the networking layer. `seq` counts every turn this
+   * client has accepted (including ones still animating); `busy` is true while
+   * anything is in flight, i.e. the committed state is not yet final.
+   */
+  const syncStatus = useCallback(
+    () => ({
+      seq: lastSeqRef.current,
+      busy:
+        drainingRef.current ||
+        queueRef.current.length > 0 ||
+        rollingRef.current ||
+        lastSeqRef.current !== stateRef.current.turnCount,
+    }),
+    [],
+  )
+
   const reset = useCallback(() => {
     runIdRef.current++
     queueRef.current = []
+    lastSeqRef.current = 0
     setActiveMove(null)
     dispatch({ type: 'RESET' })
   }, [])
@@ -218,6 +291,8 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
     applyRemoteReset,
     addPlayer,
     loadSnapshot,
+    forfeitWin,
+    syncStatus,
   }
 }
 

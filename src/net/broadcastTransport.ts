@@ -67,6 +67,11 @@ export const createBroadcastTransport: TransportFactory = ({
     bc.postMessage({ kind: 'hello', member: self } satisfies Wire)
   }, 60)
 
+  // Mirror real presence: closing the tab counts as leaving the room (the
+  // Supabase transport gets this for free when the socket drops).
+  const onPageHide = () => bc.postMessage({ kind: 'bye', clientId } satisfies Wire)
+  window.addEventListener('pagehide', onPageHide)
+
   return {
     send: (msg) => bc.postMessage({ kind: 'msg', msg } satisfies Wire),
     setInGame: (inGame) => {
@@ -77,6 +82,7 @@ export const createBroadcastTransport: TransportFactory = ({
     },
     close: () => {
       clearTimeout(helloTimer)
+      window.removeEventListener('pagehide', onPageHide)
       bc.postMessage({ kind: 'bye', clientId } satisfies Wire)
       bc.close()
     },

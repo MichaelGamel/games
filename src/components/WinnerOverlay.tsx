@@ -4,13 +4,17 @@ import { Confetti } from './Confetti'
 
 interface WinnerOverlayProps {
   winner: Player
-  onPlayAgain: () => void
+  /** Extra context under the winner line (e.g. won because everyone left). */
+  subtitle?: string
+  /** Omit to hide the Play Again button (e.g. no opponents left). */
+  onPlayAgain?: () => void
   onSecondary: () => void
   secondaryLabel?: string
 }
 
 export function WinnerOverlay({
   winner,
+  subtitle,
   onPlayAgain,
   onSecondary,
   secondaryLabel = 'New Players',
@@ -46,17 +50,20 @@ export function WinnerOverlay({
         <p className="mt-2 text-xl font-semibold" style={{ color: winner.color }}>
           {winner.name} wins! 🎉
         </p>
+        {subtitle && <p className="mt-2 text-sm text-white/60">{subtitle}</p>}
 
         <div className="mt-7 flex flex-col gap-3">
-          <motion.button
-            type="button"
-            onClick={onPlayAgain}
-            whileHover={{ scale: 1.04 }}
-            whileTap={{ scale: 0.96 }}
-            className="rounded-xl bg-linear-to-r from-grape to-grape-light px-6 py-3 text-lg font-bold text-white shadow-lg ring-1 ring-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-          >
-            Play Again
-          </motion.button>
+          {onPlayAgain && (
+            <motion.button
+              type="button"
+              onClick={onPlayAgain}
+              whileHover={{ scale: 1.04 }}
+              whileTap={{ scale: 0.96 }}
+              className="rounded-xl bg-linear-to-r from-grape to-grape-light px-6 py-3 text-lg font-bold text-white shadow-lg ring-1 ring-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            >
+              Play Again
+            </motion.button>
+          )}
           <button
             type="button"
             onClick={onSecondary}
