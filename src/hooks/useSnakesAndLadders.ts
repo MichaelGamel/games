@@ -17,10 +17,15 @@
  */
 import { useCallback, useMemo, useReducer, useRef, useState } from 'react'
 import { useReducedMotion } from 'motion/react'
-import { gameReducer, initialState, type PlayerSetup } from '../game/gameReducer'
+import {
+  gameReducer,
+  initialState,
+  type PlayerSetup,
+  type PlayerSnapshot,
+} from '../game/gameReducer'
 import { resolveTurn, rollDie } from '../game/rules'
 import { TIMING } from '../game/config'
-import type { ActiveMove, TurnResolution } from '../game/types'
+import type { ActiveMove, DieValue, TurnResolution } from '../game/types'
 import { useSound } from './useSound'
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
@@ -159,6 +164,28 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
     dispatch({ type: 'START_GAME', players })
   }, [])
 
+  // Append a host-approved late joiner. Non-destructive: it never cancels an
+  // in-flight turn animation, so existing players keep playing without a hitch.
+  const addPlayer = useCallback((player: PlayerSetup) => {
+    dispatch({ type: 'ADD_PLAYER', player })
+  }, [])
+
+  // Initialize a freshly-approved late joiner from the host's running snapshot.
+  const loadSnapshot = useCallback(
+    (snapshot: {
+      players: PlayerSnapshot[]
+      currentPlayerIndex: number
+      lastRoll: DieValue | null
+      winnerId: number | null
+    }) => {
+      runIdRef.current++
+      queueRef.current = []
+      setActiveMove(null)
+      dispatch({ type: 'LOAD_SNAPSHOT', ...snapshot })
+    },
+    [],
+  )
+
   const reset = useCallback(() => {
     runIdRef.current++
     queueRef.current = []
@@ -189,6 +216,8 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
     applyRemoteTurn,
     applyRemoteStart,
     applyRemoteReset,
+    addPlayer,
+    loadSnapshot,
   }
 }
 

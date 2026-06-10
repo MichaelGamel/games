@@ -43,8 +43,9 @@ describe('computeRoster', () => {
       member({ name: 'B', color: '#10b981' }),
       member({ name: 'C', color: '#f59e0b' }),
     ]
-    const { seats, rejected } = computeRoster(members)
+    const { seats, pending, rejected } = computeRoster(members)
     expect(seats).toHaveLength(4)
+    expect(pending).toHaveLength(0) // nobody waits before the match starts
     expect(rejected.size).toBe(0)
   })
 
@@ -75,13 +76,60 @@ describe('computeRoster', () => {
     expect(rejected.get('dup')).toBe('color-taken')
   })
 
-  it('rejects newcomers once the match is in progress', () => {
+  it('queues a late joiner as pending while a match is in progress', () => {
     const playing = host({ joinedAt: 0, inGame: true })
     const playing2 = member({ name: 'A', color: '#3b82f6', joinedAt: 1, inGame: true })
     const late = member({ clientId: 'late', name: 'Z', color: '#8b5cf6', joinedAt: 9 })
-    const { seats, rejected } = computeRoster([playing, playing2, late])
+    const { seats, pending, rejected } = computeRoster([playing, playing2, late])
     expect(seats.map((s) => s.name)).toEqual(['Host', 'A'])
-    expect(rejected.get('late')).toBe('in-progress')
+    expect(pending.map((p) => p.clientId)).toEqual(['late'])
+    expect(rejected.size).toBe(0)
+  })
+
+  it('rejects a late joiner as full when the running match already has four', () => {
+    const inGame = (name: string, color: string, joinedAt: number) =>
+      member({ name, color, joinedAt, inGame: true })
+    const late = member({ clientId: 'late', name: 'E', color: '#ec4899', joinedAt: 9 })
+    const { seats, pending, rejected } = computeRoster([
+      host({ joinedAt: 0, inGame: true }),
+      inGame('A', '#3b82f6', 1),
+      inGame('B', '#10b981', 2),
+      inGame('C', '#f59e0b', 3),
+      late,
+    ])
+    expect(seats).toHaveLength(MAX_PLAYERS)
+    expect(pending).toHaveLength(0)
+    // The fifth player is turned away and never reaches the host's queue.
+    expect(rejected.get('late')).toBe('full')
+  })
+
+  it('reserves only the open seats for pending joiners, in join order', () => {
+    // Three in-game players → one open seat: the earlier joiner waits, the later
+    // one is rejected as full rather than queued.
+    const inGame = (name: string, color: string, joinedAt: number) =>
+      member({ name, color, joinedAt, inGame: true })
+    const first = member({ clientId: 'first', name: 'D', color: '#ec4899', joinedAt: 8 })
+    const second = member({ clientId: 'second', name: 'E', color: '#14b8a6', joinedAt: 9 })
+    const { pending, rejected } = computeRoster([
+      host({ joinedAt: 0, inGame: true }),
+      inGame('A', '#3b82f6', 1),
+      inGame('B', '#10b981', 2),
+      first,
+      second,
+    ])
+    expect(pending.map((p) => p.clientId)).toEqual(['first'])
+    expect(rejected.get('second')).toBe('full')
+  })
+
+  it('rejects a late joiner whose color clashes with a seated player', () => {
+    const late = member({ clientId: 'late', name: 'Z', color: '#3b82f6', joinedAt: 9 })
+    const { pending, rejected } = computeRoster([
+      host({ joinedAt: 0, inGame: true }),
+      member({ name: 'A', color: '#3b82f6', joinedAt: 1, inGame: true }),
+      late,
+    ])
+    expect(pending).toHaveLength(0)
+    expect(rejected.get('late')).toBe('color-taken')
   })
 
   it('does not let a rejected member block a later valid one', () => {

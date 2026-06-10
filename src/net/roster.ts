@@ -15,7 +15,7 @@ export const MAX_PLAYERS = 4
 /** Minimum players the host needs before the match can start. */
 export const MIN_PLAYERS = 2
 
-export type RejectReason = 'full' | 'name-taken' | 'color-taken' | 'in-progress'
+export type RejectReason = 'full' | 'name-taken' | 'color-taken'
 
 /** Host always seats first; guests follow in join order, tie-broken by id. */
 export function orderMembers(members: readonly RoomMember[]): RoomMember[] {
@@ -29,48 +29,58 @@ export function orderMembers(members: readonly RoomMember[]): RoomMember[] {
 const normalizeName = (name: string) => name.trim().toLowerCase()
 
 export interface RosterResult {
-  /** Accepted players, in turn order. */
+  /** Accepted players, in turn order (the seated / active lineup). */
   seats: RoomMember[]
-  /** Why each non-seated member was turned away. */
+  /** Late joiners awaiting the host's approval — a match is running and a seat
+   *  is open for them. Empty before the match starts. */
+  pending: RoomMember[]
+  /** Why each non-seated, non-pending member was turned away. */
   rejected: Map<string, RejectReason>
 }
 
 /**
- * Fold the ordered members into the seated players and the rejected joiners.
- * A member is rejected when the game already started before they arrived, the
- * room is full, or their name/color collides with an already-seated player.
+ * Fold the ordered members into seats, pending joiners, and rejections.
+ *
+ * Before the match starts, newcomers fill seats directly (the host then starts).
+ * Once it is running, players already in it keep their seats and any newcomer
+ * waits in `pending` for the host to approve them — unless the room is at
+ * capacity ({@link MAX_PLAYERS}), in which case they are rejected as `full`
+ * (and never surfaced to the host). Name/color collisions are always rejected so
+ * a joiner goes back and picks again. Pending joiners reserve the open seats in
+ * join order, so a fifth arrival is turned away rather than queued.
  */
 export function computeRoster(members: readonly RoomMember[]): RosterResult {
-  const seats: RoomMember[] = []
+  const ordered = orderMembers(members)
+  const seats: RoomMember[] = ordered.filter((m) => m.inGame)
+  const pending: RoomMember[] = []
   const rejected = new Map<string, RejectReason>()
+  const running = seats.length > 0
 
-  for (const member of orderMembers(members)) {
-    // Members already in the running game keep their seat regardless.
-    if (member.inGame) {
-      seats.push(member)
-      continue
-    }
-    // Once anyone has started, the room is locked to newcomers.
-    if (seats.some((s) => s.inGame)) {
-      rejected.set(member.clientId, 'in-progress')
-      continue
-    }
-    if (seats.length >= MAX_PLAYERS) {
+  const clash = (m: RoomMember): RejectReason | null => {
+    const taken = [...seats, ...pending]
+    if (taken.some((s) => normalizeName(s.name) === normalizeName(m.name))) return 'name-taken'
+    if (taken.some((s) => s.color === m.color)) return 'color-taken'
+    return null
+  }
+
+  for (const member of ordered) {
+    if (member.inGame) continue // already seated above
+
+    // Open seats are shared by current seats and already-reserved pending ones.
+    if (seats.length + pending.length >= MAX_PLAYERS) {
       rejected.set(member.clientId, 'full')
       continue
     }
-    if (seats.some((s) => normalizeName(s.name) === normalizeName(member.name))) {
-      rejected.set(member.clientId, 'name-taken')
+    const reason = clash(member)
+    if (reason) {
+      rejected.set(member.clientId, reason)
       continue
     }
-    if (seats.some((s) => s.color === member.color)) {
-      rejected.set(member.clientId, 'color-taken')
-      continue
-    }
-    seats.push(member)
+    if (running) pending.push(member)
+    else seats.push(member)
   }
 
-  return { seats, rejected }
+  return { seats, pending, rejected }
 }
 
 /** User-facing copy for a rejection. */
@@ -79,7 +89,7 @@ export function reasonText(reason: RejectReason): { title: string; detail: strin
     case 'full':
       return {
         title: 'Room is full',
-        detail: `This game already has ${MAX_PLAYERS} players. Ask for another room code.`,
+        detail: `This room already has the maximum of ${MAX_PLAYERS} players. Ask for another room code.`,
       }
     case 'name-taken':
       return {
@@ -90,11 +100,6 @@ export function reasonText(reason: RejectReason): { title: string; detail: strin
       return {
         title: 'That color is taken',
         detail: 'Someone in this room already has that token color. Go back and choose a different one.',
-      }
-    case 'in-progress':
-      return {
-        title: 'Game already in progress',
-        detail: 'This match has already started. Ask the host to start a new room.',
       }
   }
 }

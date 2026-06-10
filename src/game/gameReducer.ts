@@ -11,8 +11,21 @@ export interface PlayerSetup {
   color: string
 }
 
+/** A seated player as captured in a running-match snapshot (adds board position). */
+export interface PlayerSnapshot extends PlayerSetup {
+  position: number
+}
+
 export type GameAction =
   | { type: 'START_GAME'; players: PlayerSetup[] }
+  | { type: 'ADD_PLAYER'; player: PlayerSetup }
+  | {
+      type: 'LOAD_SNAPSHOT'
+      players: PlayerSnapshot[]
+      currentPlayerIndex: number
+      lastRoll: DieValue | null
+      winnerId: number | null
+    }
   | { type: 'BEGIN_ROLL'; roll: DieValue }
   | { type: 'BEGIN_MOVE' }
   | { type: 'COMMIT_TURN'; resolution: TurnResolution }
@@ -36,6 +49,37 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         position: 0,
       }))
       return { ...initialState, players, phase: 'idle' }
+    }
+
+    case 'ADD_PLAYER': {
+      // A late joiner the host approved. Appended at the end of the turn order
+      // on the start cell; existing ids, positions, and the current turn are
+      // left untouched, so an in-flight match keeps running uninterrupted.
+      const player: Player = {
+        id: state.players.length,
+        name: action.player.name,
+        color: action.player.color,
+        position: 0,
+      }
+      return { ...state, players: [...state.players, player] }
+    }
+
+    case 'LOAD_SNAPSHOT': {
+      // A late joiner builds its whole game from the host's snapshot of the
+      // running match — it never received the original START_GAME broadcast.
+      const players: Player[] = action.players.map((p, id) => ({
+        id,
+        name: p.name,
+        color: p.color,
+        position: p.position,
+      }))
+      return {
+        players,
+        currentPlayerIndex: action.currentPlayerIndex,
+        phase: action.winnerId != null ? 'won' : 'idle',
+        lastRoll: action.lastRoll,
+        winnerId: action.winnerId,
+      }
     }
 
     case 'BEGIN_ROLL':

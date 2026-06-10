@@ -6,7 +6,7 @@
  * transport for a same-browser BroadcastChannel transport in development with
  * zero changes to the game code.
  */
-import type { TurnResolution } from '../game/types'
+import type { DieValue, TurnResolution } from '../game/types'
 
 /** The host creates the room (seat 0 + the one who starts); guests join it. */
 export type Role = 'host' | 'guest'
@@ -40,11 +40,32 @@ export interface StartPlayer {
   color: string
 }
 
+/**
+ * A snapshot of a running match, handed to a late joiner the host has approved.
+ * Carries every seated player (with `clientId`, so the joiner can locate its own
+ * seat) plus the live board state, so the newcomer can render the match mid-game
+ * even though it never received the original `start` broadcast.
+ */
+export interface RunningSnapshot {
+  /** Seated players in turn order, including the newly added one (at position 0). */
+  lineup: StartPlayer[]
+  /** Board cell per seat, parallel to `lineup`. */
+  positions: number[]
+  currentPlayerIndex: number
+  lastRoll: DieValue | null
+  winnerId: number | null
+}
+
 /** Messages broadcast between the clients in a room. */
 export type RoomMessage =
   | { event: 'start'; players: StartPlayer[] }
   | { event: 'turn'; resolution: TurnResolution }
   | { event: 'reset' }
+  // Host approved a late joiner: existing clients append `player`; the joiner
+  // named in `player` initializes its whole game from `snapshot`.
+  | { event: 'add-player'; player: StartPlayer; snapshot: RunningSnapshot }
+  // Host declined a late joiner's request (addressed by clientId).
+  | { event: 'reject-join'; clientId: string }
 
 export type RoomStatus = 'connecting' | 'connected' | 'error'
 

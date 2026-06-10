@@ -6,6 +6,7 @@ import {
   MAX_PLAYERS,
   MIN_PLAYERS,
   computeRoster,
+  orderMembers,
   reasonText,
   type RejectReason,
 } from '../../net/roster'
@@ -15,6 +16,7 @@ import type {
   RoomMessage,
   RoomStatus,
   Role,
+  RunningSnapshot,
   StartPlayer,
 } from '../../net/types'
 import { GameScreen } from '../GameScreen'
@@ -41,7 +43,12 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
   const [startedPlayers, setStartedPlayers] = useState<StartPlayer[] | null>(null)
   const startedRef = useRef<StartPlayer[] | null>(null)
   const sendRef = useRef<((m: RoomMessage) => void) | null>(null)
-  const applyStartRef = useRef<(players: StartPlayer[]) => void>(() => {})
+  const handleMessageRef = useRef<(m: RoomMessage) => void>(() => {})
+  // Host-only: late joiners we have already turned down, so they drop out of the
+  // request prompt even though they stay connected.
+  const [declinedIds, setDeclinedIds] = useState<ReadonlySet<string>>(() => new Set())
+  // Late joiner: the host declined our request to join the running match.
+  const [declined, setDeclined] = useState(false)
 
   const game = useSnakesAndLadders({
     controlsPlayer: seat ?? -1,
@@ -54,11 +61,7 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
     code,
     role,
     profile,
-    onMessage: (msg) => {
-      if (msg.event === 'start') applyStartRef.current(msg.players)
-      else if (msg.event === 'turn') game.applyRemoteTurn(msg.resolution)
-      else if (msg.event === 'reset') game.applyRemoteReset()
-    },
+    onMessage: (msg) => handleMessageRef.current(msg),
   })
   sendRef.current = room.send
   const myClientId = room.clientId
@@ -72,10 +75,76 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
     room.setInGame(true)
     game.applyRemoteStart(players.map(({ name, color }) => ({ name, color })))
   }
-  applyStartRef.current = applyStart
 
-  const { seats, rejected } = useMemo(() => computeRoster(room.members), [room.members])
+  // Apply a host-approved late joiner. The approved client itself rebuilds the
+  // whole match from the snapshot (it never saw `start`); everyone else simply
+  // appends the newcomer to their lineup. Idempotent against duplicate delivery.
+  const applyAddPlayer = (newPlayer: StartPlayer, snapshot: RunningSnapshot) => {
+    if (newPlayer.clientId === myClientId) {
+      startedRef.current = snapshot.lineup
+      setStartedPlayers(snapshot.lineup)
+      const mySeat = snapshot.lineup.findIndex((p) => p.clientId === myClientId)
+      setSeat(mySeat >= 0 ? mySeat : null)
+      room.setInGame(true)
+      game.loadSnapshot({
+        players: snapshot.lineup.map((p, i) => ({
+          name: p.name,
+          color: p.color,
+          position: snapshot.positions[i] ?? 0,
+        })),
+        currentPlayerIndex: snapshot.currentPlayerIndex,
+        lastRoll: snapshot.lastRoll,
+        winnerId: snapshot.winnerId,
+      })
+      return
+    }
+    const current = startedRef.current
+    if (!current || current.some((p) => p.clientId === newPlayer.clientId)) return
+    const next = [...current, newPlayer]
+    startedRef.current = next
+    setStartedPlayers(next)
+    game.addPlayer({ name: newPlayer.name, color: newPlayer.color })
+  }
+
+  handleMessageRef.current = (msg: RoomMessage) => {
+    if (msg.event === 'start') applyStart(msg.players)
+    else if (msg.event === 'turn') game.applyRemoteTurn(msg.resolution)
+    else if (msg.event === 'reset') game.applyRemoteReset()
+    else if (msg.event === 'add-player') applyAddPlayer(msg.player, msg.snapshot)
+    else if (msg.event === 'reject-join' && msg.clientId === myClientId) setDeclined(true)
+  }
+
+  // The joiner's own status (pending / full / name-or-color clash) is derived
+  // from presence: a late joiner reliably sees the seated players' `inGame`
+  // flag, so computeRoster tells them whether they fit, collide, or must wait.
+  const { seats, pending, rejected } = useMemo(() => computeRoster(room.members), [room.members])
   const myReason: RejectReason | null = rejected.get(myClientId) ?? null
+  const amPending = pending.some((p) => p.clientId === myClientId)
+
+  // Host: which late joiners to prompt about. We derive this from the host's own
+  // authoritative game state (game.players / startedPlayers) rather than the
+  // aggregated `inGame` presence flag — a client doesn't reliably read its own
+  // `inGame` back, so presence alone would hide the running match from the host.
+  // A request is anyone connected who isn't seated, isn't declined, and doesn't
+  // clash with a seated name/color; we surface only as many as there are seats.
+  const joinRequests = useMemo<RoomMember[]>(() => {
+    if (role !== 'host' || game.phase === 'setup') return []
+    const openSeats = MAX_PLAYERS - game.players.length
+    if (openSeats <= 0) return []
+    const lineupIds = new Set((startedPlayers ?? []).map((p) => p.clientId))
+    const lineupNames = new Set(game.players.map((p) => p.name.trim().toLowerCase()))
+    const lineupColors = new Set(game.players.map((p) => p.color))
+    return orderMembers(room.members)
+      .filter(
+        (m) =>
+          m.clientId !== myClientId &&
+          !lineupIds.has(m.clientId) &&
+          !declinedIds.has(m.clientId) &&
+          !lineupNames.has(m.name.trim().toLowerCase()) &&
+          !lineupColors.has(m.color),
+      )
+      .slice(0, openSeats)
+  }, [role, game.phase, game.players, startedPlayers, room.members, declinedIds, myClientId])
 
   // Host: broadcast the authoritative lineup, then everyone applies it.
   const startMatch = () => {
@@ -96,6 +165,36 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
     room.send({ event: 'start', players })
   }
 
+  // Host: admit a late joiner into the live match. Only between turns (so the
+  // newcomer can't miss an in-flight roll) and only while a seat is open.
+  const canAdmit = game.phase === 'idle' && game.players.length < MAX_PLAYERS
+  const acceptJoiner = (member: RoomMember) => {
+    const current = startedRef.current
+    if (!current || !canAdmit) return
+    if (current.some((p) => p.clientId === member.clientId)) return
+    const newPlayer: StartPlayer = {
+      clientId: member.clientId,
+      name: member.name,
+      color: member.color,
+    }
+    const lineup = [...current, newPlayer]
+    const snapshot: RunningSnapshot = {
+      lineup,
+      positions: lineup.map((_, i) => game.players[i]?.position ?? 0),
+      currentPlayerIndex: game.currentPlayerIndex,
+      lastRoll: game.lastRoll,
+      winnerId: game.winnerId,
+    }
+    applyAddPlayer(newPlayer, snapshot)
+    room.send({ event: 'add-player', player: newPlayer, snapshot })
+  }
+
+  // Host: turn a late joiner away (they return to the lobby).
+  const rejectJoiner = (member: RoomMember) => {
+    setDeclinedIds((prev) => new Set(prev).add(member.clientId))
+    room.send({ event: 'reject-join', clientId: member.clientId })
+  }
+
   const canStart = role === 'host' && game.phase === 'setup' && seats.length >= MIN_PLAYERS
 
   const rosterIds = useMemo(() => new Set(room.members.map((m) => m.clientId)), [room.members])
@@ -113,6 +212,8 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
         seats={seats}
         myClientId={myClientId}
         rejection={myReason}
+        declined={declined}
+        pendingApproval={amPending}
         canStart={canStart}
         onStart={startMatch}
         onLeave={onLeave}
@@ -131,6 +232,14 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
           onLeave,
         }}
       />
+      {role === 'host' && game.phase !== 'won' && joinRequests.length > 0 && (
+        <JoinRequests
+          requests={joinRequests}
+          canAccept={canAdmit}
+          onAccept={acceptJoiner}
+          onReject={rejectJoiner}
+        />
+      )}
       <AnimatePresence>
         {game.phase === 'won' && game.winner && (
           <WinnerOverlay
@@ -146,6 +255,71 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
   )
 }
 
+interface JoinRequestsProps {
+  requests: RoomMember[]
+  canAccept: boolean
+  onAccept: (m: RoomMember) => void
+  onReject: (m: RoomMember) => void
+}
+
+/** Host-only prompt: incoming requests to join the live match. */
+function JoinRequests({ requests, canAccept, onAccept, onReject }: JoinRequestsProps) {
+  return (
+    <div className="fixed inset-x-0 top-4 z-50 flex flex-col items-center gap-2 px-4">
+      <AnimatePresence>
+        {requests.map((m) => (
+          <motion.div
+            key={m.clientId}
+            initial={{ opacity: 0, y: -24, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -24, scale: 0.96 }}
+            className="w-full max-w-sm rounded-2xl bg-night-800/95 p-4 shadow-xl ring-1 ring-white/15 backdrop-blur"
+            role="alert"
+          >
+            <p className="text-xs font-semibold uppercase tracking-wide text-white/45">
+              Wants to join
+            </p>
+            <div className="mt-2 flex items-center gap-3">
+              <span
+                className="h-7 w-7 shrink-0 rounded-full ring-2 ring-white/40"
+                style={{ background: m.color }}
+                aria-hidden="true"
+              />
+              <span className="flex-1 truncate text-base font-semibold text-white">{m.name}</span>
+            </div>
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                onClick={() => onAccept(m)}
+                disabled={!canAccept}
+                className={cn(
+                  'flex-1 rounded-lg bg-linear-to-r from-emerald-500 to-emerald-400 px-4 py-2 text-sm font-bold text-white shadow ring-1 ring-white/20 transition',
+                  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white',
+                  canAccept ? 'hover:brightness-110' : 'cursor-not-allowed opacity-50',
+                )}
+              >
+                Accept
+              </button>
+              <button
+                type="button"
+                onClick={() => onReject(m)}
+                className="flex-1 rounded-lg bg-white/10 px-4 py-2 text-sm font-bold text-white/80 ring-1 ring-white/15 transition hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+              >
+                Reject
+              </button>
+            </div>
+            {!canAccept && (
+              <p className="mt-2 text-center text-xs text-white/45">
+                You can let players in between turns.
+              </p>
+            )}
+          </motion.div>
+        ))}
+      </AnimatePresence>
+    </div>
+  )
+}
+
 interface WaitingRoomProps {
   code: string
   role: Role
@@ -154,6 +328,10 @@ interface WaitingRoomProps {
   seats: RoomMember[]
   myClientId: string
   rejection: RejectReason | null
+  /** Host declined our request to join the running match. */
+  declined: boolean
+  /** A match is already running and we are waiting for the host to let us in. */
+  pendingApproval: boolean
   canStart: boolean
   onStart: () => void
   onLeave: () => void
@@ -167,6 +345,8 @@ function WaitingRoom({
   seats,
   myClientId,
   rejection,
+  declined,
+  pendingApproval,
   canStart,
   onStart,
   onLeave,
@@ -201,8 +381,12 @@ function WaitingRoom({
               dev test mode.
             </p>
           </>
+        ) : declined ? (
+          <DeclinedCard onBack={onLeave} />
         ) : rejection ? (
           <RejectionCard reason={rejection} onBack={onLeave} />
+        ) : pendingApproval ? (
+          <PendingCard onCancel={onLeave} />
         ) : (
           <>
             {role === 'host' ? (
@@ -310,6 +494,53 @@ function RejectionCard({ reason, onBack }: { reason: RejectReason; onBack: () =>
         className="mx-auto mt-5 rounded-xl bg-linear-to-r from-grape to-grape-light px-6 py-2.5 font-bold text-white shadow-lg ring-1 ring-white/20 transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
       >
         ← Back to change
+      </button>
+    </>
+  )
+}
+
+/** Late joiner: a match is running and the host has been asked to let us in. */
+function PendingCard({ onCancel }: { onCancel: () => void }) {
+  return (
+    <>
+      <motion.p
+        className="text-2xl"
+        animate={{ rotate: [0, 12, -12, 0] }}
+        transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
+        aria-hidden="true"
+      >
+        ✋
+      </motion.p>
+      <h2 className="mt-3 text-xl font-bold text-white">Asking the host…</h2>
+      <p className="mt-2 text-sm text-white/60">
+        This match is already in progress. The host has been asked to let you in — hang tight.
+      </p>
+      <button
+        type="button"
+        onClick={onCancel}
+        className="mx-auto mt-5 rounded-xl bg-white/10 px-6 py-2.5 font-bold text-white/80 ring-1 ring-white/15 transition hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+      >
+        Cancel
+      </button>
+    </>
+  )
+}
+
+/** Late joiner: the host declined our request. */
+function DeclinedCard({ onBack }: { onBack: () => void }) {
+  return (
+    <>
+      <p className="text-2xl">🚫</p>
+      <h2 className="mt-3 text-xl font-bold text-white">Not this time</h2>
+      <p className="mt-2 text-sm text-white/60">
+        The host declined your request to join. You can try a different room.
+      </p>
+      <button
+        type="button"
+        onClick={onBack}
+        className="mx-auto mt-5 rounded-xl bg-linear-to-r from-grape to-grape-light px-6 py-2.5 font-bold text-white shadow-lg ring-1 ring-white/20 transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+      >
+        ← Back to lobby
       </button>
     </>
   )
