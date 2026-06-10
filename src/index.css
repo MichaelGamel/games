@@ -1,0 +1,119 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------ */
+/*  Design tokens (Tailwind v4 @theme → generates utilities)          */
+/* ------------------------------------------------------------------ */
+@theme {
+  --font-display: "Fredoka", system-ui, "Segoe UI", Roboto, sans-serif;
+
+  /* Board surface */
+  --color-board-light: #fdf3d8;
+  --color-board-dark: #f3e3b3;
+  --color-board-line: #c9a96a;
+
+  /* App chrome */
+  --color-night-900: #1a1033;
+  --color-night-800: #241546;
+  --color-night-700: #321e63;
+  --color-grape: #7c3aed;
+  --color-grape-light: #a855f7;
+
+  /* Game semantics */
+  --color-ladder: #d9883a;
+  --color-ladder-rung: #b5651d;
+  --color-snake-a: #34c759;
+  --color-snake-b: #1f9d4d;
+
+  /* Reusable animations */
+  --animate-gradient: gradient-pan 22s ease infinite;
+  --animate-float: float 7s ease-in-out infinite;
+  --animate-float-slow: float 11s ease-in-out infinite;
+  --animate-wiggle: wiggle 3.5s ease-in-out infinite;
+  --animate-pulse-ring: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-shimmer: shimmer 2.4s linear infinite;
+}
+
+@keyframes gradient-pan {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes wiggle {
+  0%,
+  100% {
+    transform: rotate(-1.2deg);
+  }
+  50% {
+    transform: rotate(1.2deg);
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 14px rgba(168, 85, 247, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(168, 85, 247, 0);
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Base                                                              */
+/* ------------------------------------------------------------------ */
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-display);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: #f5f3ff;
+  overflow-x: hidden;
+}
+
+/* The 3D dice needs a perspective context */
+.scene-3d {
+  perspective: 600px;
+}
+
+/* Respect users who prefer fewer animations: kill ambient looping CSS. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}
