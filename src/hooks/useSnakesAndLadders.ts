@@ -12,10 +12,23 @@
  * two clients stay perfectly in sync. A run-id guard cancels an in-flight
  * sequence on reset/restart.
  *
+ * Besides rolls, two more sequence-stamped events flow through the same queue
+ * so every client applies them in the same order: `skip` (the current player
+ * left the room) and `decision` (host chose continue/end after a mid-game
+ * finish). Each increments `turnCount` exactly like a committed roll.
+ *
  * `controlsPlayer` gates who may roll: `'all'` for local pass-and-play, or a
  * specific player id for online play (you can only roll on your own turn).
  */
-import { useCallback, useMemo, useReducer, useRef, useState } from 'react'
+import {
+  useCallback,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from 'react'
 import { useReducedMotion } from 'motion/react'
 import {
   gameReducer,
@@ -25,10 +38,21 @@ import {
 } from '../game/gameReducer'
 import { resolveTurn, rollDie } from '../game/rules'
 import { TIMING } from '../game/config'
-import type { ActiveMove, DieValue, TurnResolution } from '../game/types'
+import type { ActiveMove, DieValue, MatchDecision, TurnResolution } from '../game/types'
 import { useSound } from './useSound'
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+
+/** A short-lived UI event (e.g. "rolled a 6"). `nonce` re-triggers animations. */
+export interface GameFlash {
+  playerId: number
+  nonce: number
+}
+
+type QueueEntry =
+  | { kind: 'turn'; resolution: TurnResolution }
+  | { kind: 'skip' }
+  | { kind: 'decision'; decision: MatchDecision }
 
 export interface GameNetHooks {
   /**
@@ -37,6 +61,8 @@ export interface GameNetHooks {
    * it to detect dropped or duplicated turns.
    */
   onLocalTurn?: (resolution: TurnResolution, seq: number) => void
+  /** Fired after a *local* continue/end decision so it can be broadcast. */
+  onLocalDecision?: (decision: MatchDecision, seq: number) => void
   /** Fired when this client starts/restarts the game (host broadcasts it). */
   onStart?: (players: PlayerSetup[]) => void
   /** Fired when a remote turn arrives out of order — we missed one or more
@@ -53,6 +79,10 @@ export interface UseGameOptions {
 export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOptions = {}) {
   const [state, dispatch] = useReducer(gameReducer, initialState)
   const [activeMove, setActiveMove] = useState<ActiveMove | null>(null)
+  // "Rolled a 6 — go again!" celebration, shown on every client.
+  const [extraTurnFlash, setExtraTurnFlash] = useState<GameFlash | null>(null)
+  // "X's turn was skipped" notice (the player left the room).
+  const [skipFlash, setSkipFlash] = useState<GameFlash | null>(null)
   const { sound, muted, toggleMute } = useSound()
   const reduced = useReducedMotion()
 
@@ -71,6 +101,8 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
   // Synchronous re-entrancy guard for `roll`: the phase only leaves 'idle' on
   // the next render, so a double-tap could otherwise fire two turns.
   const rollingRef = useRef(false)
+  // Monotonic id for flash events so repeats re-trigger their animation.
+  const flashNonceRef = useRef(0)
 
   const timings = useMemo(
     () =>
@@ -84,6 +116,23 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
           },
     [reduced],
   )
+
+  /** Show a flash, then clear it automatically (unless a newer one replaced it). */
+  const flash = useCallback(
+    (set: Dispatch<SetStateAction<GameFlash | null>>, playerId: number, ms: number) => {
+      const nonce = ++flashNonceRef.current
+      set({ playerId, nonce })
+      setTimeout(() => {
+        set((prev) => (prev?.nonce === nonce ? null : prev))
+      }, ms)
+    },
+    [],
+  )
+
+  const clearFlashes = useCallback(() => {
+    setExtraTurnFlash(null)
+    setSkipFlash(null)
+  }, [])
 
   /** Animate a fully-resolved turn, then commit it. Shared by local + remote. */
   const executeTurn = useCallback(
@@ -122,27 +171,52 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
       if (!alive()) return
       setActiveMove(null)
       dispatch({ type: 'COMMIT_TURN', resolution })
-      if (resolution.isWin) sound.playWin()
+      if (resolution.isWin) {
+        sound.playWin()
+      } else if (resolution.extraTurn) {
+        // Lucky six! Same player goes again — celebrate on every client.
+        sound.playExtraTurn()
+        flash(setExtraTurnFlash, player.id, TIMING.extraTurnFlashMs)
+      }
     },
-    [sound, timings],
+    [sound, timings, flash],
   )
 
-  // Remote turns are queued and applied one at a time (handles back-to-back
-  // rolls from a 6 even if our animation lags the opponent's).
-  const queueRef = useRef<TurnResolution[]>([])
+  /** Hand the turn to the next active player because the current one left. */
+  const executeSkip = useCallback(() => {
+    const snap = stateRef.current
+    if (snap.phase !== 'idle') return
+    sound.playSkip()
+    flash(setSkipFlash, snap.currentPlayerIndex, TIMING.skipFlashMs)
+    dispatch({ type: 'SKIP_TURN' })
+  }, [sound, flash])
+
+  const executeDecision = useCallback(
+    (decision: MatchDecision) => {
+      dispatch({ type: decision === 'continue' ? 'CONTINUE_MATCH' : 'END_MATCH' })
+    },
+    [],
+  )
+
+  // Sequence-stamped events (turns, skips, decisions) are queued and applied
+  // one at a time (handles back-to-back rolls from a 6 even if our animation
+  // lags the opponent's).
+  const queueRef = useRef<QueueEntry[]>([])
   const drainingRef = useRef(false)
   const drainQueue = useCallback(async () => {
     if (drainingRef.current) return
     drainingRef.current = true
     try {
-      let next: TurnResolution | undefined
+      let next: QueueEntry | undefined
       while ((next = queueRef.current.shift())) {
-        await executeTurn(next)
+        if (next.kind === 'turn') await executeTurn(next.resolution)
+        else if (next.kind === 'skip') executeSkip()
+        else executeDecision(next.decision)
       }
     } finally {
       drainingRef.current = false
     }
-  }, [executeTurn])
+  }, [executeTurn, executeSkip, executeDecision])
 
   const roll = useCallback(async () => {
     const snap = stateRef.current
@@ -165,22 +239,68 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
     }
   }, [controlsPlayer, executeTurn])
 
-  const applyRemoteTurn = useCallback(
-    (resolution: TurnResolution, seq: number) => {
+  /**
+   * Shared seq bookkeeping for every remote (or remotely-replicated) event.
+   * Returns true when the event is the expected next one and was queued.
+   */
+  const enqueueSequenced = useCallback(
+    (entry: QueueEntry, seq: number): boolean => {
       const expected = lastSeqRef.current + 1
-      // Already have this turn (duplicate delivery): drop it.
-      if (seq < expected) return
-      // A turn was lost in transit. Don't apply this one (it would corrupt the
-      // state) — ask the room for a full snapshot instead.
+      // Already have this event (duplicate delivery): drop it.
+      if (seq < expected) return false
+      // An event was lost in transit. Don't apply this one (it would corrupt
+      // the state) — ask the room for a full snapshot instead.
       if (seq > expected) {
         hooksRef.current?.onOutOfSync?.()
-        return
+        return false
       }
       lastSeqRef.current = seq
-      queueRef.current.push(resolution)
+      queueRef.current.push(entry)
       void drainQueue()
+      return true
     },
     [drainQueue],
+  )
+
+  const applyRemoteTurn = useCallback(
+    (resolution: TurnResolution, seq: number) => {
+      enqueueSequenced({ kind: 'turn', resolution }, seq)
+    },
+    [enqueueSequenced],
+  )
+
+  /**
+   * Skip the current (absent) player's turn as commit number `seq`. Used both
+   * by the client that initiates the skip and by everyone receiving it, so all
+   * clients replay the identical event.
+   */
+  const applySkip = useCallback(
+    (seq: number) => {
+      enqueueSequenced({ kind: 'skip' }, seq)
+    },
+    [enqueueSequenced],
+  )
+
+  const applyRemoteDecision = useCallback(
+    (decision: MatchDecision, seq: number) => {
+      enqueueSequenced({ kind: 'decision', decision }, seq)
+    },
+    [enqueueSequenced],
+  )
+
+  /** Local continue/end call (host online, anyone in hot-seat). */
+  const decide = useCallback(
+    (decision: MatchDecision) => {
+      const snap = stateRef.current
+      if (snap.phase !== 'celebrating') return
+      // Only decide from a settled state (nothing queued or animating).
+      if (drainingRef.current || queueRef.current.length > 0) return
+      if (lastSeqRef.current !== snap.turnCount) return
+      const seq = ++lastSeqRef.current
+      hooksRef.current?.onLocalDecision?.(decision, seq)
+      executeDecision(decision)
+    },
+    [executeDecision],
   )
 
   const startGame = useCallback((players: PlayerSetup[]) => {
@@ -188,17 +308,19 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
     queueRef.current = []
     lastSeqRef.current = 0
     setActiveMove(null)
+    clearFlashes()
     dispatch({ type: 'START_GAME', players })
     hooksRef.current?.onStart?.(players)
-  }, [])
+  }, [clearFlashes])
 
   const applyRemoteStart = useCallback((players: PlayerSetup[]) => {
     runIdRef.current++
     queueRef.current = []
     lastSeqRef.current = 0
     setActiveMove(null)
+    clearFlashes()
     dispatch({ type: 'START_GAME', players })
-  }, [])
+  }, [clearFlashes])
 
   // Append a host-approved late joiner. Non-destructive: it never cancels an
   // in-flight turn animation, so existing players keep playing without a hitch.
@@ -214,19 +336,23 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
       players: PlayerSnapshot[]
       currentPlayerIndex: number
       lastRoll: DieValue | null
-      winnerId: number | null
+      finishedOrder: number[]
+      awaitingDecision: boolean
+      ended: boolean
       turnCount: number
     }) => {
       runIdRef.current++
       queueRef.current = []
       lastSeqRef.current = snapshot.turnCount
       setActiveMove(null)
+      clearFlashes()
       dispatch({ type: 'LOAD_SNAPSHOT', ...snapshot })
     },
-    [],
+    [clearFlashes],
   )
 
-  // Last player standing: everyone else left the room, so `winnerId` wins now.
+  // Last player standing: every other active player left, so `winnerId` takes
+  // the remaining podium spot and the match ends now.
   const forfeitWin = useCallback(
     (winnerId: number) => {
       const snap = stateRef.current
@@ -235,10 +361,11 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
       queueRef.current = []
       lastSeqRef.current = snap.turnCount
       setActiveMove(null)
+      clearFlashes()
       dispatch({ type: 'FORFEIT_WIN', winnerId })
       sound.playWin()
     },
-    [sound],
+    [sound, clearFlashes],
   )
 
   /**
@@ -263,13 +390,18 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
     queueRef.current = []
     lastSeqRef.current = 0
     setActiveMove(null)
+    clearFlashes()
     dispatch({ type: 'RESET' })
-  }, [])
+  }, [clearFlashes])
 
   const applyRemoteReset = reset
 
   const currentPlayer = state.players[state.currentPlayerIndex] ?? null
   const winner = state.winnerId != null ? (state.players[state.winnerId] ?? null) : null
+  /** Players who already finished, in podium order (1st, 2nd, 3rd). */
+  const standings = state.finishedOrder
+    .map((id) => state.players[id])
+    .filter((p) => p != null)
   const isMyTurn = controlsPlayer === 'all' || controlsPlayer === state.currentPlayerIndex
   const canRoll = state.phase === 'idle' && isMyTurn
 
@@ -277,16 +409,22 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
     ...state,
     currentPlayer,
     winner,
+    standings,
     activeMove,
+    extraTurnFlash,
+    skipFlash,
     muted,
     toggleMute,
     controlsPlayer,
     isMyTurn,
     canRoll,
     roll,
+    decide,
     startGame,
     reset,
     applyRemoteTurn,
+    applySkip,
+    applyRemoteDecision,
     applyRemoteStart,
     applyRemoteReset,
     addPlayer,

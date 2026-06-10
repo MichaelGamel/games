@@ -179,11 +179,135 @@ describe('gameReducer', () => {
       ],
       currentPlayerIndex: 1,
       lastRoll: 4,
-      winnerId: null,
+      finishedOrder: [],
+      awaitingDecision: false,
+      ended: false,
       turnCount: 7,
     })
     expect(s.turnCount).toBe(7)
     expect(s.phase).toBe('idle')
+  })
+
+  it('restores a mid-celebration snapshot', () => {
+    const s = gameReducer(initialState, {
+      type: 'LOAD_SNAPSHOT',
+      players: [
+        { name: 'A', color: '#f00', position: 100 },
+        { name: 'B', color: '#00f', position: 4 },
+        { name: 'C', color: '#0f0', position: 9 },
+      ],
+      currentPlayerIndex: 0,
+      lastRoll: 2,
+      finishedOrder: [0],
+      awaitingDecision: true,
+      ended: false,
+      turnCount: 9,
+    })
+    expect(s.phase).toBe('celebrating')
+    expect(s.finishedOrder).toEqual([0])
+    expect(s.winnerId).toBe(0)
+  })
+})
+
+describe('gameReducer — multi-player ranked finish', () => {
+  const start3 = () =>
+    gameReducer(initialState, {
+      type: 'START_GAME',
+      players: [
+        { name: 'A', color: '#f00' },
+        { name: 'B', color: '#00f' },
+        { name: 'C', color: '#0f0' },
+      ],
+    })
+
+  const finishCurrent = (s: ReturnType<typeof start3>) => {
+    // Put the current player on 99 and roll a 1 for an exact finish.
+    const positioned = {
+      ...s,
+      players: s.players.map((p) => (p.id === s.currentPlayerIndex ? { ...p, position: 99 } : p)),
+    }
+    return gameReducer(positioned, { type: 'COMMIT_TURN', resolution: resolveTurn(99, 1) })
+  }
+
+  it('pauses for celebration when others are still racing', () => {
+    const s = finishCurrent(start3())
+    expect(s.phase).toBe('celebrating')
+    expect(s.finishedOrder).toEqual([0])
+    expect(s.winnerId).toBe(0)
+    expect(s.winReason).toBe('goal')
+  })
+
+  it('CONTINUE_MATCH resumes with the next active player', () => {
+    const s = gameReducer(finishCurrent(start3()), { type: 'CONTINUE_MATCH' })
+    expect(s.phase).toBe('idle')
+    expect(s.currentPlayerIndex).toBe(1)
+  })
+
+  it('END_MATCH stops with the standings so far', () => {
+    const s = gameReducer(finishCurrent(start3()), { type: 'END_MATCH' })
+    expect(s.phase).toBe('won')
+    expect(s.finishedOrder).toEqual([0])
+  })
+
+  it('ends the match when only one active player remains', () => {
+    let s = gameReducer(finishCurrent(start3()), { type: 'CONTINUE_MATCH' })
+    s = finishCurrent(s) // B finishes 2nd — only C is left
+    expect(s.phase).toBe('won')
+    expect(s.finishedOrder).toEqual([0, 1])
+    expect(s.winnerId).toBe(0) // first place keeps the crown
+  })
+
+  it('turn order skips players who already finished', () => {
+    let s = gameReducer(finishCurrent(start3()), { type: 'CONTINUE_MATCH' }) // B's turn
+    s = gameReducer(s, { type: 'COMMIT_TURN', resolution: resolveTurn(10, 2) })
+    expect(s.currentPlayerIndex).toBe(2) // C
+    s = gameReducer(s, { type: 'COMMIT_TURN', resolution: resolveTurn(10, 2) })
+    expect(s.currentPlayerIndex).toBe(1) // back to B, skipping finished A
+  })
+
+  it('decisions are ignored outside the celebration pause', () => {
+    const s = start3()
+    expect(gameReducer(s, { type: 'CONTINUE_MATCH' })).toBe(s)
+    expect(gameReducer(s, { type: 'END_MATCH' })).toBe(s)
+  })
+})
+
+describe('gameReducer — skipping an absent player', () => {
+  const start3 = () =>
+    gameReducer(initialState, {
+      type: 'START_GAME',
+      players: [
+        { name: 'A', color: '#f00' },
+        { name: 'B', color: '#00f' },
+        { name: 'C', color: '#0f0' },
+      ],
+    })
+
+  it('hands the turn to the next player and counts as a commit', () => {
+    const s = gameReducer(start3(), { type: 'SKIP_TURN' })
+    expect(s.currentPlayerIndex).toBe(1)
+    expect(s.turnCount).toBe(1)
+    expect(s.phase).toBe('idle')
+  })
+
+  it('skips over finished players too', () => {
+    let s = start3()
+    // A finishes 1st, host continues — B's turn.
+    s = {
+      ...s,
+      players: s.players.map((p) => (p.id === 0 ? { ...p, position: 99 } : p)),
+    }
+    s = gameReducer(s, { type: 'COMMIT_TURN', resolution: resolveTurn(99, 1) })
+    s = gameReducer(s, { type: 'CONTINUE_MATCH' })
+    s = gameReducer(s, { type: 'SKIP_TURN' }) // B is away → C's turn
+    expect(s.currentPlayerIndex).toBe(2)
+    s = gameReducer(s, { type: 'SKIP_TURN' }) // C away too → back to B (not A)
+    expect(s.currentPlayerIndex).toBe(1)
+  })
+
+  it('is ignored unless the game is waiting for a roll', () => {
+    const rolling = gameReducer(start3(), { type: 'BEGIN_ROLL', roll: 3 })
+    expect(gameReducer(rolling, { type: 'SKIP_TURN' })).toBe(rolling)
   })
 })
 
@@ -219,6 +343,26 @@ describe('gameReducer — forfeit win (last player standing)', () => {
 
   it('is ignored for an unknown player id', () => {
     expect(gameReducer(started, { type: 'FORFEIT_WIN', winnerId: 5 })).toBe(started)
+  })
+
+  it('appends the survivor after earlier finishers (first place keeps the crown)', () => {
+    let s = gameReducer(initialState, {
+      type: 'START_GAME',
+      players: [
+        { name: 'A', color: '#f00' },
+        { name: 'B', color: '#00f' },
+        { name: 'C', color: '#0f0' },
+      ],
+    })
+    // A finishes 1st, play continues, then everyone but C leaves.
+    s = { ...s, players: s.players.map((p) => (p.id === 0 ? { ...p, position: 99 } : p)) }
+    s = gameReducer(s, { type: 'COMMIT_TURN', resolution: resolveTurn(99, 1) })
+    s = gameReducer(s, { type: 'CONTINUE_MATCH' })
+    s = gameReducer(s, { type: 'FORFEIT_WIN', winnerId: 2 })
+    expect(s.phase).toBe('won')
+    expect(s.finishedOrder).toEqual([0, 2])
+    expect(s.winnerId).toBe(0)
+    expect(s.winReason).toBe('forfeit')
   })
 })
 

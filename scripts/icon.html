@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 512px; height: 512px; overflow: hidden; }
+      .icon {
+        width: 512px;
+        height: 512px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background:
+          radial-gradient(120% 120% at 30% 18%, #8b5cf6 0%, #6d28d9 42%, #4c1d95 78%, #3b0764 100%);
+      }
+      /* keep the mark inside the maskable safe zone (~80% center) */
+      .icon img {
+        width: 250px;
+        height: 250px;
+        filter: drop-shadow(0 14px 26px rgba(0,0,0,.45));
+      }
+    </style>
+  </head>
+  <body>
+    <div class="icon">
+      <img src="/public/favicon.svg" alt="" />
+    </div>
+  </body>
+</html>

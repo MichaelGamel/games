@@ -38,8 +38,12 @@ intact rather than reaching across them.
   - `rules.ts` — `rollDie(rng?)` (injectable RNG, so tests are deterministic) and `resolveTurn()`,
     which returns a `TurnResolution`: the *complete* outcome of one roll (walk path, bounce, jump,
     final position, win, extra-turn).
-  - `gameReducer.ts` — pure phase machine (`setup → idle → rolling → moving → won`). It only
-    *applies* an already-resolved `TurnResolution`; it computes no rules and runs no async.
+  - `gameReducer.ts` — pure phase machine (`setup → idle → rolling → moving → celebrating → won`).
+    It only *applies* an already-resolved `TurnResolution`; it computes no rules and runs no async.
+    `celebrating` is the pause after a mid-game finish (3–4 players): the finisher joins
+    `finishedOrder` (the podium) and the host decides continue/end. Besides rolls, two more
+    sequence-stamped events commit through the same `turnCount` ordering: `SKIP_TURN` (the current
+    player left an online room) and `CONTINUE_MATCH`/`END_MATCH`.
   - `types.ts` — shared domain shapes. `TurnResolution` is the key contract: it is computed once
     and replayed identically on every client.
 

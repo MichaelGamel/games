@@ -95,6 +95,26 @@ export class SoundEngine {
     osc.stop(t0 + 0.6)
   }
 
+  /**
+   * Playful "lucky six" jingle: a fast rising arpeggio capped with a sparkle
+   * trill. Shorter and cheekier than the win fanfare — it says "go again!".
+   */
+  playExtraTurn(): void {
+    if (this.muted || !this.ensure()) return
+    const run = [659.25, 783.99, 987.77, 1318.51] // E5 G5 B5 E6
+    run.forEach((f, i) => this.blip(f, i * 0.07, 0.16, 'triangle', 0.28))
+    // sparkle on top
+    this.blip(2093, 0.3, 0.1, 'sine', 0.16) // C7
+    this.blip(2637, 0.38, 0.14, 'sine', 0.14) // E7
+  }
+
+  /** Soft descending "whoosh" when an absent player's turn is skipped. */
+  playSkip(): void {
+    if (this.muted || !this.ensure()) return
+    this.blip(440, 0, 0.12, 'triangle', 0.18)
+    this.blip(330, 0.1, 0.16, 'triangle', 0.14)
+  }
+
   /** Victory fanfare. */
   playWin(): void {
     if (this.muted || !this.ensure()) return

@@ -6,7 +6,7 @@
  * transport for a same-browser BroadcastChannel transport in development with
  * zero changes to the game code.
  */
-import type { DieValue, TurnResolution } from '../game/types'
+import type { DieValue, MatchDecision, TurnResolution } from '../game/types'
 
 /** The host creates the room (seat 0 + the one who starts); guests join it. */
 export type Role = 'host' | 'guest'
@@ -53,7 +53,12 @@ export interface RunningSnapshot {
   positions: number[]
   currentPlayerIndex: number
   lastRoll: DieValue | null
-  winnerId: number | null
+  /** Seats that already finished, in podium order. */
+  finishedOrder: number[]
+  /** True when paused on a mid-game finish, awaiting the host's decision. */
+  awaitingDecision: boolean
+  /** True when the match is over. */
+  ended: boolean
   /** Committed turns so far — the sync sequence number. */
   turnCount: number
   /** Which match (start/restart generation) this snapshot belongs to. */
@@ -75,6 +80,11 @@ export interface RunningSnapshot {
 export type RoomMessage =
   | { event: 'start'; players: StartPlayer[]; matchId: number }
   | { event: 'turn'; resolution: TurnResolution; seq: number; matchId: number }
+  // The current player left the room: commit number `seq` hands the turn to
+  // the next active player on every client.
+  | { event: 'skip-turn'; seq: number; matchId: number }
+  // Host's continue/end call after a mid-game finish, committed as `seq`.
+  | { event: 'decide'; decision: MatchDecision; seq: number; matchId: number }
   | { event: 'reset' }
   // Host approved a late joiner: existing clients append `player`; the joiner
   // named in `player` initializes its whole game from `snapshot`.

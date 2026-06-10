@@ -39,7 +39,12 @@ with up to **4 players** on different computers over Supabase Realtime. No datab
 🔇 **Sound from thin air** — every effect (roll, step, ladder, snake, victory) is synthesized live
 with the Web Audio API. Zero audio files ship. Mute toggle included.
 
-🎉 **A finish worth racing to** — confetti bursts and a trophy animation crown the winner.
+🎉 **A finish worth racing to** — every finisher gets a confetti celebration, and with 3–4 players
+the race keeps going for 2nd and 3rd place until a full medal podium is set. Rolling a 6 fires a
+"Lucky 6!" fanfare and grants another roll.
+
+🪂 **Drop-out proof** — if the player whose turn it is leaves an online match, their turn is skipped
+automatically and everyone is notified; the game never gets stuck.
 
 ♿ **Accessible &amp; responsive** — roll with `Space`/`Enter`, `aria-live` turn announcements, full
 `prefers-reduced-motion` support, and a layout that flows from desktop side-by-side to mobile stacked.
@@ -54,8 +59,9 @@ It's the board game you already know — faithfully:
 | --- | --- |
 | 🪜 **Ladders** | Land on a ladder's foot and you're whisked to the top. |
 | 🐍 **Snakes** | Land on a snake's head and you slither back down to its tail. |
-| 🎲 **Roll a 6** | Take an **extra turn**. |
+| 🎲 **Roll a 6** | Take an **extra turn** (with a celebratory fanfare). |
 | 🏁 **Land on 100 exactly** | Overshoot the final cell and your token **bounces back** — you must hit 100 on the nose to win. |
+| 🥇 **3–4 players** | The first finisher takes **1st place** and the race continues (the host decides) until only one player is left — the final podium shows 1st/2nd/3rd. |
 
 ---
 
@@ -66,7 +72,7 @@ It's the board game you already know — faithfully:
 <td width="50%" valign="top">
 
 ### 🎲 Pass &amp; Play
-Two players, **one screen**, taking turns on the same device. Pick names and token colors on the
+2–4 players, **one screen**, taking turns on the same device. Pick names and token colors on the
 setup screen and go. No setup, no keys, works offline.
 
 </td>
@@ -186,7 +192,7 @@ src/
 │  ├─ config.ts        # board layout, snakes/ladders, palette, timings (single source of truth)
 │  ├─ board.ts         # boustrophedon cell ⇄ (row,col) mapping
 │  ├─ rules.ts         # rollDie() + resolveTurn() → TurnResolution
-│  ├─ gameReducer.ts   # pure phase machine: setup → idle → rolling → moving → won
+│  ├─ gameReducer.ts   # pure phase machine: setup → idle → rolling → moving → celebrating → won
 │  ├─ types.ts         # shared domain shapes (TurnResolution is the key contract)
 │  └─ rules.test.ts    # Vitest unit tests
 ├─ hooks/

@@ -3,10 +3,16 @@ import { useSnakesAndLadders } from '../hooks/useSnakesAndLadders'
 import { SetupScreen } from './SetupScreen'
 import { GameScreen } from './GameScreen'
 import { WinnerOverlay } from './WinnerOverlay'
+import { CelebrationOverlay } from './CelebrationOverlay'
 
-/** Local "pass & play": both players share one screen and device. */
+/** Local "pass & play": all players share one screen and device. */
 export function LocalGame({ onExit }: { onExit: () => void }) {
   const game = useSnakesAndLadders({ controlsPlayer: 'all' })
+
+  const lastFinisher =
+    game.finishedOrder.length > 0
+      ? (game.players[game.finishedOrder[game.finishedOrder.length - 1]] ?? null)
+      : null
 
   return (
     <>
@@ -19,10 +25,22 @@ export function LocalGame({ onExit }: { onExit: () => void }) {
       </AnimatePresence>
 
       <AnimatePresence>
-        {game.phase === 'won' && game.winner && (
+        {game.phase === 'celebrating' && lastFinisher && (
+          <CelebrationOverlay
+            key={`celebrate-${game.finishedOrder.length}`}
+            player={lastFinisher}
+            rank={game.finishedOrder.length - 1}
+            // Hot-seat: the shared device decides together.
+            canDecide
+            waitingFor=""
+            onContinue={() => game.decide('continue')}
+            onEnd={() => game.decide('end')}
+          />
+        )}
+        {game.phase === 'won' && game.standings.length > 0 && (
           <WinnerOverlay
             key="winner"
-            winner={game.winner}
+            standings={game.standings}
             onPlayAgain={() =>
               game.startGame(game.players.map((p) => ({ name: p.name, color: p.color })))
             }

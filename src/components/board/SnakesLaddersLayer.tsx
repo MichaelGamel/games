@@ -109,12 +109,20 @@ export function SnakesLaddersLayer() {
         ))}
       </defs>
 
-      {/* Ladders first, snakes on top so heads read clearly. */}
+      {/*
+        Draw order is the only z-control in SVG, so paint in three passes:
+        ladders, then every snake body, then every snake face. Splitting bodies
+        from faces guarantees no snake's body is ever painted over another
+        snake's head — every face reads clearly, with nothing above it.
+      */}
       {ladders.map((l, i) => (
         <Ladder key={`l-${i}`} id={i} from={l.from} to={l.to} />
       ))}
       {snakes.map((s, i) => (
-        <Snake key={`s-${i}`} index={i} head={s.head} tail={s.tail} />
+        <Snake key={`sb-${i}`} layer="body" index={i} head={s.head} tail={s.tail} />
+      ))}
+      {snakes.map((s, i) => (
+        <Snake key={`sh-${i}`} layer="head" index={i} head={s.head} tail={s.tail} />
       ))}
     </svg>
   )

@@ -10,6 +10,11 @@ export const TOTAL_CELLS = BOARD_SIZE * BOARD_SIZE // 100
 export const WINNING_CELL = TOTAL_CELLS
 export const DIE_FACES = 6
 
+/** Hard ceiling on players per game session (local or online). */
+export const MAX_PLAYERS = 4
+/** Minimum players a match needs to start. */
+export const MIN_PLAYERS = 2
+
 /** Classic board: ladder foot → ladder top (always climbing up). */
 export const LADDERS: Readonly<Record<number, number>> = {
   1: 38,
@@ -86,4 +91,8 @@ export const TIMING = {
   jumpMs: 850,
   /** Pause before handing the turn to the next player. */
   turnHandoffMs: 420,
+  /** How long the "rolled a 6 — go again!" celebration stays on screen. */
+  extraTurnFlashMs: 2600,
+  /** How long the "turn skipped" notice stays on screen. */
+  skipFlashMs: 3200,
 } as const

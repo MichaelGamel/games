@@ -7,10 +7,18 @@ interface SnakeProps {
   head: number
   tail: number
   index: number
+  /**
+   * Which visual layer to emit. SVG has no z-index — only document order — so
+   * the parent draws every snake's `'body'` first, then every snake's `'head'`
+   * in a second pass. That guarantees no snake's body is ever painted over
+   * another snake's face. `'body'` also owns the shared `<defs>` (gradient +
+   * clip path) that the head layer references by id.
+   */
+  layer: 'body' | 'head'
 }
 
 /** A single snake: tapering d3 body, themed markings, a defined head + eyes. */
-export function Snake({ head, tail, index }: SnakeProps) {
+export function Snake({ head, tail, index, layer }: SnakeProps) {
   const theme = themeFor(index)
   const geom = useMemo(
     () => buildSnakeGeometry(cellToPercent(head), cellToPercent(tail), head),
@@ -87,30 +95,40 @@ export function Snake({ head, tail, index }: SnakeProps) {
   const tForkEnd = { x: hd.tip.x + hd.front.x * hd.width * 0.95, y: hd.tip.y + hd.front.y * hd.width * 0.95 }
   const tForkN = { x: hd.normal.x * hd.width * 0.22, y: hd.normal.y * hd.width * 0.22 }
 
+  // Body layer: also declares the shared <defs> (gradient + clip path) that the
+  // head layer references by id.
+  if (layer === 'body') {
+    return (
+      <g filter="url(#sl-shadow)">
+        <defs>
+          <linearGradient id={gradId} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor={theme.light} />
+            <stop offset="100%" stopColor={theme.dark} />
+          </linearGradient>
+          <clipPath id={clipId}>
+            <path d={geom.bodyPath} />
+          </clipPath>
+        </defs>
+
+        {/* body + markings */}
+        <path d={geom.bodyPath} fill={`url(#${gradId})`} stroke={theme.outline} strokeWidth={0.7} />
+        <g clipPath={`url(#${clipId})`}>
+          <path d={geom.glossPath} fill={theme.gloss} opacity={0.35} />
+          {markings}
+        </g>
+      </g>
+    )
+  }
+
+  // Head layer: the face (tongue + head + eyes), drawn after every body so it
+  // is never covered by another snake.
   return (
     <g filter="url(#sl-shadow)">
-      <defs>
-        <linearGradient id={gradId} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor={theme.light} />
-          <stop offset="100%" stopColor={theme.dark} />
-        </linearGradient>
-        <clipPath id={clipId}>
-          <path d={geom.bodyPath} />
-        </clipPath>
-      </defs>
-
       {/* tongue (drawn under the head) */}
       <g stroke="#e11d48" strokeWidth={Math.max(0.4, hd.width * 0.12)} strokeLinecap="round" fill="none">
         <line x1={hd.tip.x} y1={hd.tip.y} x2={tForkStart.x} y2={tForkStart.y} />
         <line x1={tForkStart.x} y1={tForkStart.y} x2={tForkEnd.x + tForkN.x} y2={tForkEnd.y + tForkN.y} />
         <line x1={tForkStart.x} y1={tForkStart.y} x2={tForkEnd.x - tForkN.x} y2={tForkEnd.y - tForkN.y} />
-      </g>
-
-      {/* body + markings */}
-      <path d={geom.bodyPath} fill={`url(#${gradId})`} stroke={theme.outline} strokeWidth={0.7} />
-      <g clipPath={`url(#${clipId})`}>
-        <path d={geom.glossPath} fill={theme.gloss} opacity={0.35} />
-        {markings}
       </g>
 
       {/* head */}

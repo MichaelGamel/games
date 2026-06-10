@@ -7,13 +7,11 @@
  * rules and reach the same seats/rejections — consistent even across machines
  * with skewed clocks (the numbers are arbitrary, but everyone sees the same set).
  */
+import { MAX_PLAYERS, MIN_PLAYERS } from '../game/config'
 import type { RoomMember } from './types'
 
-/** Hard ceiling on players per game session. */
-export const MAX_PLAYERS = 4
-
-/** Minimum players the host needs before the match can start. */
-export const MIN_PLAYERS = 2
+// Re-exported so room code keeps one import site for roster rules.
+export { MAX_PLAYERS, MIN_PLAYERS }
 
 export type RejectReason = 'full' | 'name-taken' | 'color-taken'
 

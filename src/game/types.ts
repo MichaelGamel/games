@@ -26,28 +26,42 @@ export interface Player {
 
 /**
  * Finite phases of a game.
- * - `setup`   — choosing players, board hidden
- * - `idle`    — waiting for the current player to roll
- * - `rolling` — dice is tumbling
- * - `moving`  — a token is walking / climbing / sliding
- * - `won`     — someone reached the final cell
+ * - `setup`       — choosing players, board hidden
+ * - `idle`        — waiting for the current player to roll
+ * - `rolling`     — dice is tumbling
+ * - `moving`      — a token is walking / climbing / sliding
+ * - `celebrating` — a player just reached the final cell but others can still
+ *                   play on; paused until the host decides continue/end
+ * - `won`         — the match is over (standings are final)
  */
-export type Phase = 'setup' | 'idle' | 'rolling' | 'moving' | 'won'
+export type Phase = 'setup' | 'idle' | 'rolling' | 'moving' | 'celebrating' | 'won'
 
 /** How the match ended: reaching the final cell, or everyone else leaving. */
 export type WinReason = 'goal' | 'forfeit'
+
+/** Host's call after a mid-game finish: play on, or end with current standings. */
+export type MatchDecision = 'continue' | 'end'
 
 export interface GameState {
   players: Player[]
   currentPlayerIndex: number
   phase: Phase
   lastRoll: DieValue | null
+  /** First-place finisher (`finishedOrder[0]`), or the forfeit survivor. */
   winnerId: number | null
   winReason: WinReason | null
   /**
+   * Player ids in the order they reached the final cell (1st, 2nd, 3rd…).
+   * Finished players drop out of the turn rotation but keep their seats.
+   * The match ends when at most one active player remains — that last
+   * player is never ranked.
+   */
+  finishedOrder: number[]
+  /**
    * Number of committed turns since the match started. Acts as the sequence
-   * number for online play: every client commits the same turns in the same
-   * order, so equal `turnCount` ⇒ identical state.
+   * number for online play: every client commits the same turns (including
+   * skips and continue/end decisions) in the same order, so equal
+   * `turnCount` ⇒ identical state.
    */
   turnCount: number
 }

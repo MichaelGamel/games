@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion } from 'motion/react'
-import { DEFAULT_PLAYERS, TOKEN_COLORS } from '../game/config'
+import { DEFAULT_PLAYERS, MAX_PLAYERS, MIN_PLAYERS, TOKEN_COLORS } from '../game/config'
 import type { PlayerSetup } from '../game/gameReducer'
 import { cn } from '../lib/cn'
 
@@ -25,6 +25,17 @@ export function SetupScreen({ onStart, onBack }: SetupScreenProps) {
 
   const update = (index: number, patch: Partial<PlayerSetup>) =>
     setPlayers((prev) => prev.map((p, i) => (i === index ? { ...p, ...patch } : p)))
+
+  const addPlayer = () =>
+    setPlayers((prev) => {
+      if (prev.length >= MAX_PLAYERS) return prev
+      const used = new Set(prev.map((p) => p.color))
+      const color = TOKEN_COLORS.find((c) => !used.has(c.value))?.value ?? TOKEN_COLORS[0].value
+      return [...prev, { name: `Player ${prev.length + 1}`, color }]
+    })
+
+  const removePlayer = (index: number) =>
+    setPlayers((prev) => (prev.length > MIN_PLAYERS ? prev.filter((_, i) => i !== index) : prev))
 
   const handleStart = () =>
     onStart(
@@ -63,7 +74,7 @@ export function SetupScreen({ onStart, onBack }: SetupScreenProps) {
           <span aria-hidden="true">🐍</span> Snakes &amp; Ladders{' '}
           <span aria-hidden="true">🪜</span>
         </motion.h1>
-        <p className="mt-3 text-white/70">Two players. One board. Roll your way to 100.</p>
+        <p className="mt-3 text-white/70">2–4 players. One board. Roll your way to 100.</p>
       </motion.header>
 
       <motion.div
@@ -86,9 +97,22 @@ export function SetupScreen({ onStart, onBack }: SetupScreenProps) {
               >
                 {(p.name.trim() || `P${index + 1}`).charAt(0).toUpperCase()}
               </span>
-              <label htmlFor={`player-${index}`} className="text-sm font-semibold text-white/80">
+              <label
+                htmlFor={`player-${index}`}
+                className="flex-1 text-sm font-semibold text-white/80"
+              >
                 Player {index + 1}
               </label>
+              {players.length > MIN_PLAYERS && (
+                <button
+                  type="button"
+                  onClick={() => removePlayer(index)}
+                  aria-label={`Remove player ${index + 1}`}
+                  className="grid h-7 w-7 place-items-center rounded-full text-white/60 ring-1 ring-white/15 transition hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+                >
+                  ✕
+                </button>
+              )}
             </div>
 
             <input
@@ -125,6 +149,16 @@ export function SetupScreen({ onStart, onBack }: SetupScreenProps) {
             </div>
           </div>
         ))}
+
+        {players.length < MAX_PLAYERS && (
+          <button
+            type="button"
+            onClick={addPlayer}
+            className="grid min-h-32 place-items-center rounded-2xl border-2 border-dashed border-white/20 text-white/60 transition hover:border-white/40 hover:bg-white/5 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+          >
+            <span className="text-lg font-semibold">＋ Add player</span>
+          </button>
+        )}
       </motion.div>
 
       <motion.button
