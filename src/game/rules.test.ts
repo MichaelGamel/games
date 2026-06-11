@@ -132,6 +132,18 @@ describe('gameReducer', () => {
     expect(started.players.every((p) => p.position === 0)).toBe(true)
   })
 
+  it('threads isBot through START_GAME and defaults it to false', () => {
+    const mixed = gameReducer(initialState, {
+      type: 'START_GAME',
+      players: [
+        { name: 'Human', color: '#f00' },
+        { name: 'Bot', color: '#00f', isBot: true },
+      ],
+    })
+    expect(mixed.players[0].isBot).toBe(false)
+    expect(mixed.players[1].isBot).toBe(true)
+  })
+
   it('advances to the next player after a normal turn', () => {
     const next = gameReducer(started, {
       type: 'COMMIT_TURN',

@@ -61,6 +61,11 @@ export function PlayerPanel({
               <div className="flex items-center justify-between gap-2">
                 <p className="truncate text-sm font-semibold text-white lg:text-base">
                   {p.name}
+                  {p.isBot && (
+                    <span className="ml-1 text-xs" title="Computer player" aria-label="computer player">
+                      🤖
+                    </span>
+                  )}
                   {myId === p.id && <span className="ml-1 text-xs font-normal text-white/50">(you)</span>}
                 </p>
                 {/* Mobile: tiny right slot — medal when finished, cell number otherwise. */}

@@ -26,6 +26,21 @@ export function SetupScreen({ onStart, onBack }: SetupScreenProps) {
   const update = (index: number, patch: Partial<PlayerSetup>) =>
     setPlayers((prev) => prev.map((p, i) => (i === index ? { ...p, ...patch } : p)))
 
+  // Toggle a seat between human and computer. Swaps the *default* name to match
+  // the kind (Player N ⇄ Computer N) but never clobbers a custom name.
+  const setBot = (index: number, isBot: boolean) =>
+    setPlayers((prev) =>
+      prev.map((p, i) => {
+        if (i !== index) return p
+        const human = `Player ${i + 1}`
+        const bot = `Computer ${i + 1}`
+        let name = p.name
+        if (isBot && name.trim() === human) name = bot
+        else if (!isBot && name.trim() === bot) name = human
+        return { ...p, isBot, name }
+      }),
+    )
+
   const addPlayer = () =>
     setPlayers((prev) => {
       if (prev.length >= MAX_PLAYERS) return prev
@@ -40,8 +55,9 @@ export function SetupScreen({ onStart, onBack }: SetupScreenProps) {
   const handleStart = () =>
     onStart(
       players.map((p, i) => ({
-        name: p.name.trim() || `Player ${i + 1}`,
+        name: p.name.trim() || (p.isBot ? `Computer ${i + 1}` : `Player ${i + 1}`),
         color: p.color,
+        isBot: p.isBot ?? false,
       })),
     )
 
@@ -143,6 +159,34 @@ export function SetupScreen({ onStart, onBack }: SetupScreenProps) {
                       )}
                       style={{ background: c.value }}
                     />
+                  )
+                })}
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <p className="mb-2 text-xs uppercase tracking-wide text-white/50">Player type</p>
+              <div className="flex gap-2">
+                {[
+                  { bot: false, label: '🧑 Human' },
+                  { bot: true, label: '🤖 Computer' },
+                ].map((opt) => {
+                  const selected = (p.isBot ?? false) === opt.bot
+                  return (
+                    <button
+                      key={opt.label}
+                      type="button"
+                      onClick={() => setBot(index, opt.bot)}
+                      aria-pressed={selected}
+                      className={cn(
+                        'flex-1 rounded-lg px-3 py-2 text-sm font-semibold ring-1 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-white',
+                        selected
+                          ? 'bg-linear-to-r from-grape to-grape-light text-white ring-white/20'
+                          : 'bg-night-900/60 text-white/70 ring-white/15 hover:bg-white/10 hover:text-white',
+                      )}
+                    >
+                      {opt.label}
+                    </button>
                   )
                 })}
               </div>

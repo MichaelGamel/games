@@ -115,6 +115,13 @@ export class SoundEngine {
     this.blip(330, 0.1, 0.16, 'triangle', 0.14)
   }
 
+  /** Light "pop" when an emoji reaction lands (online play). */
+  playReaction(): void {
+    if (this.muted || !this.ensure()) return
+    this.blip(880, 0, 0.07, 'triangle', 0.14)
+    this.blip(1318.51, 0.05, 0.1, 'sine', 0.12)
+  }
+
   /** Victory fanfare. */
   playWin(): void {
     if (this.muted || !this.ensure()) return

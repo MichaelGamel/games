@@ -106,6 +106,9 @@ export type RoomMessage =
   | { event: 'sync-request'; clientId: string }
   // Authoritative state for one lagging client (addressed by clientId).
   | { event: 'sync-state'; toClientId: string; fromHost: boolean; snapshot: RunningSnapshot }
+  // A quick emoji reaction. Purely cosmetic and ephemeral: it never touches
+  // game state, so it bypasses the seq/turnCount sync machinery entirely.
+  | { event: 'reaction'; clientId: string; emoji: string }
 
 export type RoomStatus = 'connecting' | 'connected' | 'error'
 

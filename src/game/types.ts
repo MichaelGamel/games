@@ -22,6 +22,12 @@ export interface Player {
   color: string
   /** Current cell: 0 = off-board start, 1..100 on the board. */
   position: number
+  /**
+   * True for a computer-controlled player (local "Pass & Play" only). Carried
+   * data, never a rule — the reducer never branches on it; the orchestration
+   * layer just auto-rolls on a bot's turn.
+   */
+  isBot: boolean
 }
 
 /**

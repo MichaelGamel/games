@@ -1,5 +1,6 @@
 import { AnimatePresence } from 'motion/react'
 import { useSnakesAndLadders } from '../hooks/useSnakesAndLadders'
+import { useBotAutoPlay } from '../hooks/useBotAutoPlay'
 import { SetupScreen } from './SetupScreen'
 import { GameScreen } from './GameScreen'
 import { WinnerOverlay } from './WinnerOverlay'
@@ -8,6 +9,8 @@ import { CelebrationOverlay } from './CelebrationOverlay'
 /** Local "pass & play": all players share one screen and device. */
 export function LocalGame({ onExit }: { onExit: () => void }) {
   const game = useSnakesAndLadders({ controlsPlayer: 'all' })
+  // Auto-roll for any computer players when it's their turn.
+  useBotAutoPlay(game)
 
   const lastFinisher =
     game.finishedOrder.length > 0
@@ -42,7 +45,9 @@ export function LocalGame({ onExit }: { onExit: () => void }) {
             key="winner"
             standings={game.standings}
             onPlayAgain={() =>
-              game.startGame(game.players.map((p) => ({ name: p.name, color: p.color })))
+              game.startGame(
+                game.players.map((p) => ({ name: p.name, color: p.color, isBot: p.isBot })),
+              )
             }
             onSecondary={game.reset}
           />

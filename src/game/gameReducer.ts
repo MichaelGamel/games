@@ -9,6 +9,8 @@ import type { DieValue, GameState, Player, TurnResolution } from './types'
 export interface PlayerSetup {
   name: string
   color: string
+  /** Computer-controlled player (local play only). Defaults to false. */
+  isBot?: boolean
 }
 
 /** A seated player as captured in a running-match snapshot (adds board position). */
@@ -72,6 +74,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         name: p.name,
         color: p.color,
         position: 0,
+        isBot: p.isBot ?? false,
       }))
       return { ...initialState, players, phase: 'idle' }
     }
@@ -85,6 +88,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         name: action.player.name,
         color: action.player.color,
         position: 0,
+        // Late joiners are online-only humans; bots never go over the wire.
+        isBot: false,
       }
       return { ...state, players: [...state.players, player] }
     }
@@ -97,6 +102,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         name: p.name,
         color: p.color,
         position: p.position,
+        // Snapshots arrive over the network (online only); no bots there.
+        isBot: false,
       }))
       return {
         players,

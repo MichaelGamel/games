@@ -22,6 +22,8 @@ import type {
 import { GameScreen } from '../GameScreen'
 import { WinnerOverlay } from '../WinnerOverlay'
 import { CelebrationOverlay } from '../CelebrationOverlay'
+import { ReactionBar, ReactionLayer, type FloatingReaction } from './Reactions'
+import { soundEngine } from '../../audio/soundEngine'
 import { cn } from '../../lib/cn'
 
 interface OnlineRoomProps {
@@ -42,6 +44,10 @@ const FORFEIT_GRACE_MS = 5000
 const SKIP_GRACE_MS = 4000
 /** How long a join/leave/skip notice stays on screen. */
 const NOTICE_MS = 4000
+/** How long a floating emoji reaction stays on screen. */
+const REACTION_MS = 2600
+/** Minimum spacing between our own reaction sends (anti-spam). */
+const REACTION_THROTTLE_MS = 350
 
 type SyncPing = Extract<RoomMessage, { event: 'sync-ping' }>
 type SyncState = Extract<RoomMessage, { event: 'sync-state' }>
@@ -235,6 +241,32 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
     if (ahead || hostFix) adoptSnapshot(snapshot)
   }
 
+  // ---- Emoji reactions (cosmetic; never touch game state or the seq) -------
+
+  const [reactions, setReactions] = useState<FloatingReaction[]>([])
+  const reactionIdRef = useRef(0)
+  const lastReactionAtRef = useRef(0)
+
+  const addFloating = useCallback((emoji: string, name: string, color: string) => {
+    const id = `react-${++reactionIdRef.current}`
+    const left = 12 + Math.random() * 76
+    setReactions((prev) => [...prev, { id, emoji, name, color, left }])
+    soundEngine.playReaction()
+    setTimeout(() => setReactions((prev) => prev.filter((r) => r.id !== id)), REACTION_MS)
+  }, [])
+
+  const sendReaction = useCallback(
+    (emoji: string) => {
+      const now = Date.now()
+      if (now - lastReactionAtRef.current < REACTION_THROTTLE_MS) return
+      lastReactionAtRef.current = now
+      // Broadcasts don't echo back to the sender, so render our own locally.
+      sendRef.current?.({ event: 'reaction', clientId: myClientId, emoji })
+      addFloating(emoji, profile.name, profile.color)
+    },
+    [addFloating, myClientId, profile.name, profile.color],
+  )
+
   handleMessageRef.current = (msg: RoomMessage) => {
     if (msg.event === 'start') applyStart(msg.players, msg.matchId)
     else if (msg.event === 'turn') {
@@ -253,6 +285,10 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
     else if (msg.event === 'sync-ping') handleSyncPing(msg)
     else if (msg.event === 'sync-request' && msg.clientId !== myClientId) sendStateTo(msg.clientId)
     else if (msg.event === 'sync-state') handleSyncState(msg)
+    else if (msg.event === 'reaction') {
+      const sender = room.members.find((m) => m.clientId === msg.clientId)
+      addFloating(msg.emoji, sender?.name ?? 'Someone', sender?.color ?? '#a855f7')
+    }
   }
 
   // Heartbeat: gossip our settled state so dropped messages are detected and
@@ -539,6 +575,8 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
         }}
       />
       <Notices notices={notices} />
+      <ReactionLayer reactions={reactions} />
+      <ReactionBar onReact={sendReaction} />
       {role === 'host' && game.phase !== 'won' && joinRequests.length > 0 && (
         <JoinRequests
           requests={joinRequests}

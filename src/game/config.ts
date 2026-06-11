@@ -95,4 +95,6 @@ export const TIMING = {
   extraTurnFlashMs: 2600,
   /** How long the "turn skipped" notice stays on screen. */
   skipFlashMs: 3200,
+  /** "Thinking" pause before a computer player auto-rolls (local play). */
+  botThinkMs: 650,
 } as const
