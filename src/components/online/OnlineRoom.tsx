@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useSnakesAndLadders } from '../../hooks/useSnakesAndLadders'
+import { useUnloadGuard } from '../../hooks/useUnloadGuard'
 import { useRoom } from '../../net/useRoom'
 import {
   MAX_PLAYERS,
@@ -96,6 +97,10 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
   })
   sendRef.current = room.send
   const myClientId = room.clientId
+
+  // Warn before closing/refreshing/navigating away while a match is live, so a
+  // player doesn't drop their friends mid-game by accident.
+  useUnloadGuard(game.phase !== 'setup' && game.phase !== 'won')
 
   // Lock in a started match: find our seat, remember the lineup, flag presence.
   const applyStart = (players: StartPlayer[], matchId: number) => {
@@ -339,6 +344,20 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
   const myReason: RejectReason | null = rejected.get(myClientId) ?? null
   const amPending = pending.some((p) => p.clientId === myClientId)
 
+  // Who is acting host right now? Only the host admits late joiners and makes
+  // the continue/end call, so if they leave mid-match the room would stall.
+  // Instead every client deterministically promotes the next player: the
+  // lowest-seated one still connected. The original host is seat 0, so they
+  // keep it whenever present; otherwise it hands down the lineup. With no
+  // server, all clients fold the same lineup + presence and agree on who it is.
+  const actingHostClientId = useMemo(() => {
+    if (!startedPlayers) return null
+    const here = new Set(room.members.map((m) => m.clientId))
+    here.add(myClientId)
+    return startedPlayers.find((p) => here.has(p.clientId))?.clientId ?? null
+  }, [startedPlayers, room.members, myClientId])
+  const amActingHost = actingHostClientId === myClientId
+
   // Host: which late joiners to prompt about. We derive this from the host's own
   // authoritative game state (game.players / startedPlayers) rather than the
   // aggregated `inGame` presence flag — a client doesn't reliably read its own
@@ -346,7 +365,7 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
   // A request is anyone connected who isn't seated, isn't declined, and doesn't
   // clash with a seated name/color; we surface only as many as there are seats.
   const joinRequests = useMemo<RoomMember[]>(() => {
-    if (role !== 'host' || game.phase === 'setup') return []
+    if (!amActingHost || game.phase === 'setup') return []
     const openSeats = MAX_PLAYERS - game.players.length
     if (openSeats <= 0) return []
     const lineupIds = new Set((startedPlayers ?? []).map((p) => p.clientId))
@@ -362,7 +381,7 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
           !lineupColors.has(m.color),
       )
       .slice(0, openSeats)
-  }, [role, game.phase, game.players, startedPlayers, room.members, declinedIds, myClientId])
+  }, [amActingHost, game.phase, game.players, startedPlayers, room.members, declinedIds, myClientId])
 
   // Host: broadcast the authoritative lineup, then everyone applies it.
   const startMatch = () => {
@@ -536,6 +555,21 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
     pushNotice(`⏭️ ${name} is away — turn skipped`)
   }, [game.skipFlash, game.players, pushNotice])
 
+  // Announce host hand-offs: when the host leaves a 3+ player match, the next
+  // player takes over and everyone is told who it is. Skipped when only one
+  // active player is left — that is a forfeit win, not a hand-off (the lone
+  // survivor wins rather than "becoming the host").
+  const prevActingHostRef = useRef<string | null>(null)
+  useEffect(() => {
+    const prev = prevActingHostRef.current
+    prevActingHostRef.current = actingHostClientId
+    if (!startedPlayers || game.phase === 'setup' || game.phase === 'won') return
+    if (prev == null || actingHostClientId == null || prev === actingHostClientId) return
+    if (presentActiveCount < 2) return
+    const name = startedPlayers.find((p) => p.clientId === actingHostClientId)?.name ?? 'A player'
+    pushNotice(`👑 ${name} is now the host`)
+  }, [actingHostClientId, startedPlayers, game.phase, presentActiveCount, pushNotice])
+
   if (game.phase === 'setup') {
     return (
       <WaitingRoom
@@ -559,8 +593,10 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
     game.finishedOrder.length > 0
       ? (game.players[game.finishedOrder[game.finishedOrder.length - 1]] ?? null)
       : null
-  const hostPresent = room.members.some((m) => m.role === 'host')
-  const hostName = game.players[0]?.name ?? 'the host'
+  const actingHostName =
+    lineup.find((p) => p.clientId === actingHostClientId)?.name ??
+    game.players[0]?.name ??
+    'the host'
 
   return (
     <>
@@ -577,7 +613,7 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
       <Notices notices={notices} />
       <ReactionLayer reactions={reactions} />
       <ReactionBar onReact={sendReaction} />
-      {role === 'host' && game.phase !== 'won' && joinRequests.length > 0 && (
+      {amActingHost && game.phase !== 'won' && joinRequests.length > 0 && (
         <JoinRequests
           requests={joinRequests}
           canAccept={canAdmit}
@@ -591,10 +627,11 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
             key={`celebrate-${game.finishedOrder.length}`}
             player={lastFinisher}
             rank={game.finishedOrder.length - 1}
-            // The host decides whether to play on — unless they left, in which
-            // case anyone may (duplicate decisions dedupe by sequence number).
-            canDecide={role === 'host' || !hostPresent}
-            waitingFor={hostName}
+            // Only the acting host decides whether to play on. If the original
+            // host left, the next player inherits the call (and duplicate
+            // decisions dedupe by sequence number anyway).
+            canDecide={amActingHost}
+            waitingFor={actingHostName}
             onContinue={() => game.decide('continue')}
             onEnd={() => game.decide('end')}
           />

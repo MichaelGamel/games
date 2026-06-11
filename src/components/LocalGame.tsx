@@ -1,6 +1,7 @@
 import { AnimatePresence } from 'motion/react'
 import { useSnakesAndLadders } from '../hooks/useSnakesAndLadders'
 import { useBotAutoPlay } from '../hooks/useBotAutoPlay'
+import { useUnloadGuard } from '../hooks/useUnloadGuard'
 import { SetupScreen } from './SetupScreen'
 import { GameScreen } from './GameScreen'
 import { WinnerOverlay } from './WinnerOverlay'
@@ -11,6 +12,8 @@ export function LocalGame({ onExit }: { onExit: () => void }) {
   const game = useSnakesAndLadders({ controlsPlayer: 'all' })
   // Auto-roll for any computer players when it's their turn.
   useBotAutoPlay(game)
+  // Warn before closing/refreshing/navigating away while a game is in progress.
+  useUnloadGuard(game.phase !== 'setup' && game.phase !== 'won')
 
   const lastFinisher =
     game.finishedOrder.length > 0
