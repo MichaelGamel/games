@@ -72,10 +72,30 @@ intact rather than reaching across them.
   - There is **no authoritative server and no database** — only Realtime broadcast/presence channels.
     Clients stay in sync because they replay the same `TurnResolution`, not because a server validates.
 
-- **`src/components/`** — thin presentational React. `App.tsx` is a 3-mode switch
-  (`menu | local | online`); `OnlineGame` (and the Supabase SDK) is `lazy`-loaded so local play
-  never pays for it. Board/dice/online subtrees live in `components/board/`, `components/dice/`,
-  `components/online/`.
+- **`src/components/`** — thin presentational React. `App.tsx` is the **Snakes & Ladders shell** at
+  `/snakes` — a 3-mode switch (`menu | local | online`); `OnlineGame` (and the Supabase SDK) is
+  `lazy`-loaded so local play never pays for it. Board/dice/online subtrees live in
+  `components/board/`, `components/dice/`, `components/online/`. Shared shell pieces — `HomeHub` (the
+  hub landing), `Backdrop` (the gradient/blob chrome every route renders inside), and
+  `BackToHubLink` — sit at the top of `components/`.
+
+### Routing & the multi-game hub
+
+The app is **"Robin's Games," a multi-game hub.** `src/main.tsx` is the bootstrap (`createRoot`);
+`src/Root.tsx` holds the `<BrowserRouter>` and gives each game its own route:
+
+- `/` → `HomeHub` — the data-driven landing (a `GAMES` array → animated `<Link>` cards; add a game
+  by adding one array entry).
+- `/snakes` → `App` — the Snakes & Ladders 3-mode switch, **unchanged internally** (it only moved
+  off `/`).
+- `/ludo` → `LudoApp` — **lazy-loaded** (`React.lazy` + `Suspense`) so its chunk never loads on `/`
+  or `/snakes`. Placeholder today; the real game replaces it in a later phase.
+- `*` → redirect to `/`.
+
+Per-route SEO is a dependency-free hook, `src/lib/useDocumentMeta.ts`: each route component calls it
+with its own title/description, and it sets `document.title`, the meta description, the
+`<link rel="canonical">`, and the OG/Twitter title/description mirrors. Netlify's SPA fallback
+(`/* → /index.html`) serves deep links to `/snakes` and `/ludo` unchanged.
 
 ### Adding a new game action
 

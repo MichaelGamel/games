@@ -1,5 +1,6 @@
 import { motion } from 'motion/react'
 import { cn } from '../lib/cn'
+import { BackToHubLink } from './BackToHubLink'
 
 interface MainMenuProps {
   onLocal: () => void
@@ -27,6 +28,8 @@ export function MainMenu({ onLocal, onOnline, onlineEnabled }: MainMenuProps) {
       exit={{ opacity: 0, y: -24, transition: { duration: 0.25 } }}
       className="relative z-10 flex min-h-screen flex-col items-center justify-center gap-10 px-4 py-10"
     >
+      <BackToHubLink />
+
       <motion.header variants={item} className="text-center">
         <motion.h1
           className="text-4xl font-bold tracking-tight text-white drop-shadow sm:text-6xl"
