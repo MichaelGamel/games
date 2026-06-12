@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence } from 'motion/react'
 import { useSnakesAndLadders } from '../../hooks/useSnakesAndLadders'
 import { useUnloadGuard } from '../../hooks/useUnloadGuard'
+import { useLeaveConfirm } from '../../hooks/useLeaveConfirm'
 import { useRoom } from '../../net/useRoom'
 import {
   MAX_PLAYERS,
@@ -19,6 +20,7 @@ import type {
   StartPlayer,
 } from '../../net/types'
 import { GameScreen } from '../GameScreen'
+import { ConfirmLeaveDialog } from '../ConfirmLeaveDialog'
 import { WinnerOverlay } from '../WinnerOverlay'
 import { CelebrationOverlay } from '../CelebrationOverlay'
 import { ReactionBar, ReactionLayer, type FloatingReaction } from './Reactions'
@@ -59,6 +61,9 @@ type SyncState = Extract<RoomMessage, { event: 'sync-state' }>
  * the authoritative start payload by clientId.
  */
 export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
+  // Mid-match Leave goes through a sad-face confirmation so an accidental tap
+  // never abandons a running game.
+  const { confirming, requestLeave, cancelLeave, confirmLeave } = useLeaveConfirm(onLeave)
   // This client's seat (player index). Unknown until the match starts.
   const [seat, setSeat] = useState<number | null>(null)
   const [startedPlayers, setStartedPlayers] = useState<StartPlayer[] | null>(null)
@@ -605,9 +610,10 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
           everyonePresent,
           canPlay,
           testMode: room.testMode,
-          onLeave,
+          onLeave: requestLeave,
         }}
       />
+      <ConfirmLeaveDialog open={confirming} onConfirm={confirmLeave} onCancel={cancelLeave} />
       <Notices notices={notices} />
       <ReactionLayer reactions={reactions} />
       <ReactionBar onReact={sendReaction} />

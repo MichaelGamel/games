@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence } from 'motion/react'
 import { useLudo } from '../../../hooks/useLudo'
 import { useUnloadGuard } from '../../../hooks/useUnloadGuard'
+import { useLeaveConfirm } from '../../../hooks/useLeaveConfirm'
 import { useRoom } from '../../../net/useRoom'
 import {
   MAX_PLAYERS,
@@ -21,6 +22,7 @@ import type {
 import { TOKENS_PER_PLAYER, PROGRESS_BASE } from '../../../ludo/config'
 import type { LudoSeatState, LudoTurnResolution } from '../../../ludo/types'
 import { LudoGameScreen } from '../LudoGameScreen'
+import { ConfirmLeaveDialog } from '../../ConfirmLeaveDialog'
 import { WinnerOverlay } from '../../WinnerOverlay'
 import { CelebrationOverlay } from '../../CelebrationOverlay'
 import { ReactionBar, ReactionLayer, type FloatingReaction } from '../../online/Reactions'
@@ -71,6 +73,9 @@ type SyncState = Extract<Msg, { event: 'sync-state' }>
  * only the per-turn resolution and per-seat snapshot payloads differ.
  */
 export function LudoOnlineRoom({ code, role, profile, onLeave }: LudoOnlineRoomProps) {
+  // Mid-match Leave goes through a sad-face confirmation so an accidental tap
+  // never abandons a running game.
+  const { confirming, requestLeave, cancelLeave, confirmLeave } = useLeaveConfirm(onLeave)
   const [seat, setSeat] = useState<number | null>(null)
   const [startedPlayers, setStartedPlayers] = useState<StartPlayer[] | null>(null)
   const startedRef = useRef<StartPlayer[] | null>(null)
@@ -560,9 +565,10 @@ export function LudoOnlineRoom({ code, role, profile, onLeave }: LudoOnlineRoomP
           everyonePresent,
           canPlay,
           testMode: room.testMode,
-          onLeave,
+          onLeave: requestLeave,
         }}
       />
+      <ConfirmLeaveDialog open={confirming} onConfirm={confirmLeave} onCancel={cancelLeave} />
       <Notices notices={notices} />
       <ReactionLayer reactions={reactions} />
       <ReactionBar onReact={sendReaction} />
