@@ -14,6 +14,9 @@ const LudoApp = lazy(() =>
 const FourApp = lazy(() =>
   import('./components/four/FourApp').then((m) => ({ default: m.FourApp })),
 )
+const UnoApp = lazy(() =>
+  import('./components/uno/UnoApp').then((m) => ({ default: m.UnoApp })),
+)
 
 function RouteFallback() {
   const { t } = useTranslation()
@@ -56,6 +59,14 @@ export function Root() {
             element={
               <Suspense fallback={<RouteFallback />}>
                 <FourApp />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/uno"
+            element={
+              <Suspense fallback={<RouteFallback />}>
+                <UnoApp />
               </Suspense>
             }
           />

@@ -7,7 +7,7 @@
  */
 import { loadLocal, saveLocal } from './storage'
 
-export type GameId = 'snakes' | 'ludo' | 'four'
+export type GameId = 'snakes' | 'ludo' | 'four' | 'uno'
 
 export interface PlayerStats {
   games: number

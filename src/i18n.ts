@@ -12,11 +12,13 @@ import enOnline from './locales/en/online.json'
 import enSnakes from './locales/en/snakes.json'
 import enLudo from './locales/en/ludo.json'
 import enFour from './locales/en/four.json'
+import enUno from './locales/en/uno.json'
 import arCommon from './locales/ar/common.json'
 import arOnline from './locales/ar/online.json'
 import arSnakes from './locales/ar/snakes.json'
 import arLudo from './locales/ar/ludo.json'
 import arFour from './locales/ar/four.json'
+import arUno from './locales/ar/uno.json'
 
 const RTL_LANGS = ['ar', 'he', 'fa', 'ur'] as const
 
@@ -25,11 +27,11 @@ void i18n
   .use(initReactI18next)
   .init({
     resources: {
-      en: { common: enCommon, online: enOnline, snakes: enSnakes, ludo: enLudo, four: enFour },
-      ar: { common: arCommon, online: arOnline, snakes: arSnakes, ludo: arLudo, four: arFour },
+      en: { common: enCommon, online: enOnline, snakes: enSnakes, ludo: enLudo, four: enFour, uno: enUno },
+      ar: { common: arCommon, online: arOnline, snakes: arSnakes, ludo: arLudo, four: arFour, uno: arUno },
     },
     defaultNS: 'common',
-    ns: ['common', 'online', 'snakes', 'ludo', 'four'],
+    ns: ['common', 'online', 'snakes', 'ludo', 'four', 'uno'],
     fallbackLng: 'en',
     supportedLngs: ['en', 'ar'],
     detection: {

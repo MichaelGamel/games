@@ -42,7 +42,7 @@ const grid = {
 }
 
 export function HomeHub() {
-  const { t } = useTranslation(['common', 'snakes', 'ludo', 'four'])
+  const { t } = useTranslation(['common', 'snakes', 'ludo', 'four', 'uno'])
   useDocumentMeta({
     title: t('common:hub.metaTitle'),
     description: t('common:hub.metaDescription'),
@@ -73,6 +73,14 @@ export function HomeHub() {
       to: '/four',
       accent: 'from-sky-500/30 via-transparent to-amber-400/25',
     },
+    {
+      id: 'uno',
+      title: t('uno:title'),
+      tagline: t('uno:tagline'),
+      emoji: '🃏',
+      to: '/uno',
+      accent: 'from-red-500/30 via-transparent to-yellow-400/25',
+    },
   ]
 
   return (
@@ -97,7 +105,7 @@ export function HomeHub() {
 
         <m.ul
           variants={grid}
-          className="grid w-full max-w-5xl list-none gap-5 sm:grid-cols-2 lg:grid-cols-3"
+          className="grid w-full max-w-3xl list-none grid-cols-2 gap-4 sm:gap-5"
         >
           {games.map((game) => (
             <GameCard key={game.id} game={game} />
@@ -168,7 +176,7 @@ function GameCard({ game }: { game: Game }) {
         whileTap={{ scale: 0.98 }}
         transition={{ type: 'spring', stiffness: 400, damping: 25 }}
         className={cn(
-          'group relative flex h-full w-full flex-col items-center gap-3 overflow-hidden rounded-3xl bg-white/5 p-8 text-center ring-1 ring-white/10 backdrop-blur',
+          'group relative flex h-full w-full flex-col items-center gap-3 overflow-hidden rounded-3xl bg-white/5 p-5 text-center ring-1 ring-white/10 backdrop-blur sm:p-8',
           'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white',
         )}
       >
