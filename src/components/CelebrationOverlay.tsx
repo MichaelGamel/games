@@ -1,4 +1,4 @@
-import { motion } from 'motion/react'
+import { m } from 'motion/react'
 import { placeLabel, placeMedal, type PodiumPlayer } from '../lib/place'
 import { Confetti } from './Confetti'
 
@@ -31,7 +31,7 @@ export function CelebrationOverlay({
   onEnd,
 }: CelebrationOverlayProps) {
   return (
-    <motion.div
+    <m.div
       className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-4 backdrop-blur-sm"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -42,21 +42,21 @@ export function CelebrationOverlay({
     >
       <Confetti count={60} />
 
-      <motion.div
+      <m.div
         className="relative z-10 w-full max-w-sm rounded-3xl bg-night-800 p-8 text-center shadow-2xl ring-1 ring-white/15"
         initial={{ scale: 0.7, y: 30, opacity: 0 }}
         animate={{ scale: 1, y: 0, opacity: 1 }}
         exit={{ scale: 0.8, opacity: 0 }}
         transition={{ type: 'spring', stiffness: 260, damping: 20 }}
       >
-        <motion.div
+        <m.div
           className="text-7xl"
           animate={{ y: [0, -12, 0], rotate: [0, -8, 8, 0] }}
           transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
           aria-hidden="true"
         >
           {placeMedal(rank)}
-        </motion.div>
+        </m.div>
 
         <h2 className="mt-4 text-3xl font-bold text-white">
           {placeLabel(rank)} place!
@@ -68,7 +68,7 @@ export function CelebrationOverlay({
 
         {canDecide ? (
           <div className="mt-7 flex flex-col gap-3">
-            <motion.button
+            <m.button
               type="button"
               onClick={onContinue}
               whileHover={{ scale: 1.04 }}
@@ -76,7 +76,7 @@ export function CelebrationOverlay({
               className="rounded-xl bg-linear-to-r from-emerald-500 to-emerald-400 px-6 py-3 text-lg font-bold text-white shadow-lg ring-1 ring-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
             >
               Keep Playing ▶
-            </motion.button>
+            </m.button>
             <button
               type="button"
               onClick={onEnd}
@@ -90,7 +90,7 @@ export function CelebrationOverlay({
             Waiting for {waitingFor} to decide…
           </p>
         )}
-      </motion.div>
-    </motion.div>
+      </m.div>
+    </m.div>
   )
 }

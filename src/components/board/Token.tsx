@@ -1,4 +1,5 @@
-import { motion, useReducedMotion, type Transition } from 'motion/react'
+import { memo } from 'react'
+import { m, useReducedMotion, type Transition } from 'motion/react'
 import type { ActiveMove } from '../../game/types'
 import { TIMING } from '../../game/config'
 import { cn } from '../../lib/cn'
@@ -22,11 +23,23 @@ interface TokenProps {
 }
 
 /**
- * A player's pawn. The outer motion.div owns *position* (animated to the target
- * cell); the inner motion.div owns *flourish* (lift, climb-bob, snake-wiggle)
+ * A player's pawn. The outer m.div owns *position* (animated to the target
+ * cell); the inner m.div owns *flourish* (lift, climb-bob, snake-wiggle)
  * so transforms never fight the centering translate.
+ *
+ * Memoized: all props are primitives, so while one token walks the board the
+ * other (unchanged) pawns skip re-rendering entirely.
  */
-export function Token({ name, color, x, y, kind, isMoving, isCurrent, z }: TokenProps) {
+export const Token = memo(function Token({
+  name,
+  color,
+  x,
+  y,
+  kind,
+  isMoving,
+  isCurrent,
+  z,
+}: TokenProps) {
   const reduced = useReducedMotion()
   const scale = reduced ? 1 : 0.9
 
@@ -48,14 +61,14 @@ export function Token({ name, color, x, y, kind, isMoving, isCurrent, z }: Token
       : { scale: 1, rotate: 0, scaleY: 1, y: '0%' }
 
   return (
-    <motion.div
+    <m.div
       className="absolute"
       style={{ x: '-50%', y: '-50%', width: '8.6%', height: '8.6%', zIndex: z }}
       initial={false}
       animate={{ left: `${x}%`, top: `${y}%` }}
       transition={positionTransition}
     >
-      <motion.div
+      <m.div
         className="relative h-full w-full"
         animate={flourish}
         transition={{ duration: kind === 'walk' ? 0.18 : TIMING.jumpMs / 1000 }}
@@ -81,7 +94,7 @@ export function Token({ name, color, x, y, kind, isMoving, isCurrent, z }: Token
             {name.charAt(0).toUpperCase()}
           </span>
         </div>
-      </motion.div>
-    </motion.div>
+      </m.div>
+    </m.div>
   )
-}
+})

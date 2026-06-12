@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { motion } from 'motion/react'
+import { m } from 'motion/react'
 import { TOKEN_COLORS, type ColorOption } from '../../game/config'
 import type { PlayerProfile, Role } from '../../net/types'
 import { cn } from '../../lib/cn'
@@ -51,7 +51,7 @@ export function OnlineLobby({ onBack, onStart, initial, colors }: OnlineLobbyPro
   }
 
   return (
-    <motion.div
+    <m.div
       key="lobby"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -143,7 +143,7 @@ export function OnlineLobby({ onBack, onStart, initial, colors }: OnlineLobbyPro
           </div>
         )}
 
-        <motion.button
+        <m.button
           type="button"
           onClick={handleSubmit}
           disabled={joinDisabled}
@@ -156,8 +156,8 @@ export function OnlineLobby({ onBack, onStart, initial, colors }: OnlineLobbyPro
           )}
         >
           {tab === 'create' ? 'Create Room ▶' : 'Join Room ▶'}
-        </motion.button>
+        </m.button>
       </div>
-    </motion.div>
+    </m.div>
   )
 }

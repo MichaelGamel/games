@@ -47,11 +47,21 @@ intact rather than reaching across them.
   - `types.ts` — shared domain shapes. `TurnResolution` is the key contract: it is computed once
     and replayed identically on every client.
 
+- **`src/lib/turnSequencer.ts`** — the framework-free **sequencing core** shared by both games'
+  hooks (unit-tested in `turnSequencer.test.ts`). It owns the online-sync protocol mechanics:
+  sequence numbers, duplicate/gap detection, the one-at-a-time event queue, run cancellation, the
+  local-roll re-entrancy lock, and the settled-state (`busy`) probe. The drain also **gates each
+  queued event on the previous event's commit being visible in game state** (React renders
+  asynchronously, so a burst of queued events could otherwise outrun the render flush); if a commit
+  never lands it abandons the queue and fires `onOutOfSync`.
+
 - **`src/hooks/useSnakesAndLadders.ts`** — the **orchestration facade**, and the *only* place that
   mixes the reducer, rules, sound, and animation timing. Components depend on the object it returns
-  (`GameController`), never on the reducer/rules/timers directly.
+  (`GameController`), never on the reducer/rules/timers directly. `useLudo.ts` mirrors it for Ludo;
+  both delegate everything protocol-shaped to the shared turn sequencer and keep only their
+  game-specific parts (rules calls, animation beats, sounds).
   - A turn runs as an async sequence (`executeTurn`): tumble dice → walk cell-by-cell → take
-    snake/ladder → commit. A `runIdRef` cancellation token invalidates an in-flight sequence on
+    snake/ladder → commit. The sequencer's run token (`alive`) invalidates an in-flight sequence on
     reset/restart.
   - `controlsPlayer` gates who may roll: `'all'` for local hot-seat, or a specific player index for
     online (you can only roll on your turn).
@@ -65,6 +75,12 @@ intact rather than reaching across them.
     Realtime broadcast + presence) and `broadcastTransport.ts` (same-browser `BroadcastChannel` dev
     fallback). `useRoom.ts` picks one: Supabase when keys are present, else the BroadcastChannel
     fallback in dev only.
+  - `useOnlineMatch.ts` — the **game-agnostic half of an online room**, generic over the per-turn
+    resolution `R` and the per-seat state `S`: self-healing sync (ping/request/state with host
+    tie-break), host migration, late-joiner approval, presence skips/forfeits, notices, and emoji
+    reactions. `OnlineRoom` (Snakes) and `LudoOnlineRoom` are thin shells over it — each supplies
+    its game controller, a small `OnlineMatchAdapter` (seat state to/from `S`), and the screens to
+    render. Adding a third online game means writing exactly that much.
   - `roster.ts` — pure room rules (capacity `MAX_PLAYERS=4`/`MIN_PLAYERS=2`, name/color uniqueness,
     seat ordering, lock-out of late joiners). It is **eventually consistent by construction**: every
     client publishes the same per-member data via presence and folds the roster with identical pure
@@ -117,6 +133,9 @@ contract.
 
 - React 19, TypeScript ~6, Vite 8, Tailwind CSS v4 (via `@tailwindcss/vite`, configured in CSS — no
   `tailwind.config`), `motion` (Framer Motion) for animation, `d3-shape` for snake curves.
+- Animations use `m.*` components under a single `LazyMotion features={domAnimation} strict`
+  provider in `Root.tsx` — never import `motion.*` (strict mode throws in dev); this keeps the full
+  Motion feature-set out of the main bundle.
 - Sound is fully synthesized in `audio/soundEngine.ts` via the Web Audio API — there are no audio
   asset files.
 - Deploys to Netlify (`netlify.toml`): `npm run build` → `dist/`, with an SPA fallback redirect.

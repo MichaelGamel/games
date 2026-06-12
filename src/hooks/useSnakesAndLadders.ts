@@ -9,26 +9,18 @@
  * take any snake/ladder → commit. The sequence is factored into `executeTurn`
  * so it can be driven both by a *local* roll and by a *remote* roll arriving
  * over the network — both replay the same resolved {@link TurnResolution}, so
- * two clients stay perfectly in sync. A run-id guard cancels an in-flight
- * sequence on reset/restart.
+ * two clients stay perfectly in sync.
  *
- * Besides rolls, two more sequence-stamped events flow through the same queue
- * so every client applies them in the same order: `skip` (the current player
- * left the room) and `decision` (host chose continue/end after a mid-game
- * finish). Each increments `turnCount` exactly like a committed roll.
+ * Everything protocol-shaped — sequence numbers, the one-at-a-time event
+ * queue, duplicate/gap handling, run cancellation, the settled-state probe —
+ * lives in the shared {@link createTurnSequencer} core (also used by Ludo),
+ * so this hook only contains what is specific to Snakes & Ladders: the rules
+ * calls, the animation beats, and the sounds.
  *
  * `controlsPlayer` gates who may roll: `'all'` for local pass-and-play, or a
  * specific player id for online play (you can only roll on your own turn).
  */
-import {
-  useCallback,
-  useMemo,
-  useReducer,
-  useRef,
-  useState,
-  type Dispatch,
-  type SetStateAction,
-} from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { useReducedMotion } from 'motion/react'
 import {
   gameReducer,
@@ -39,20 +31,13 @@ import {
 import { resolveTurn, rollDie } from '../game/rules'
 import { TIMING } from '../game/config'
 import type { ActiveMove, DieValue, MatchDecision, TurnResolution } from '../game/types'
+import { createTurnSequencer, type SequencerHandlers } from '../lib/turnSequencer'
+import { useFlash, type GameFlash } from './useFlash'
 import { useSound } from './useSound'
 
+export type { GameFlash }
+
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
-
-/** A short-lived UI event (e.g. "rolled a 6"). `nonce` re-triggers animations. */
-export interface GameFlash {
-  playerId: number
-  nonce: number
-}
-
-type QueueEntry =
-  | { kind: 'turn'; resolution: TurnResolution }
-  | { kind: 'skip' }
-  | { kind: 'decision'; decision: MatchDecision }
 
 export interface GameNetHooks {
   /**
@@ -80,29 +65,21 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
   const [state, dispatch] = useReducer(gameReducer, initialState)
   const [activeMove, setActiveMove] = useState<ActiveMove | null>(null)
   // "Rolled a 6 — go again!" celebration, shown on every client.
-  const [extraTurnFlash, setExtraTurnFlash] = useState<GameFlash | null>(null)
+  const extraTurnFlash = useFlash()
   // "X's turn was skipped" notice (the player left the room).
-  const [skipFlash, setSkipFlash] = useState<GameFlash | null>(null)
+  const skipFlash = useFlash()
   const { sound, muted, toggleMute } = useSound()
   const reduced = useReducedMotion()
 
-  // Cancellation token: bumping this invalidates any in-flight sequence.
-  const runIdRef = useRef(0)
-  // Always read the freshest state inside async sequences.
+  // Latest-value refs, synced after each commit. Every consumer reads them
+  // from event handlers or async continuations — never during render — so the
+  // post-render write is always fresh by the time it is read.
   const stateRef = useRef(state)
-  stateRef.current = state
-  // Keep net hooks fresh without rebuilding callbacks.
   const hooksRef = useRef(hooks)
-  hooksRef.current = hooks
-  // Sequence number of the latest turn accepted (committed, queued, or
-  // animating). Compared against state.turnCount (committed only) to tell
-  // whether this client is fully settled.
-  const lastSeqRef = useRef(0)
-  // Synchronous re-entrancy guard for `roll`: the phase only leaves 'idle' on
-  // the next render, so a double-tap could otherwise fire two turns.
-  const rollingRef = useRef(false)
-  // Monotonic id for flash events so repeats re-trigger their animation.
-  const flashNonceRef = useRef(0)
+  useEffect(() => {
+    stateRef.current = state
+    hooksRef.current = hooks
+  })
 
   const timings = useMemo(
     () =>
@@ -117,28 +94,11 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
     [reduced],
   )
 
-  /** Show a flash, then clear it automatically (unless a newer one replaced it). */
-  const flash = useCallback(
-    (set: Dispatch<SetStateAction<GameFlash | null>>, playerId: number, ms: number) => {
-      const nonce = ++flashNonceRef.current
-      set({ playerId, nonce })
-      setTimeout(() => {
-        set((prev) => (prev?.nonce === nonce ? null : prev))
-      }, ms)
-    },
-    [],
-  )
-
-  const clearFlashes = useCallback(() => {
-    setExtraTurnFlash(null)
-    setSkipFlash(null)
-  }, [])
-
   /** Animate a fully-resolved turn, then commit it. Shared by local + remote. */
   const executeTurn = useCallback(
-    async (resolution: TurnResolution) => {
-      const myRun = ++runIdRef.current
-      const alive = () => runIdRef.current === myRun
+    async (resolution: TurnResolution, alive: () => boolean) => {
+      // Safe even for queued remote turns: the sequencer only starts this
+      // handler once the previous event's commit is visible in `stateRef`.
       const player = stateRef.current.players[stateRef.current.currentPlayerIndex]
       if (!player) return
 
@@ -176,10 +136,10 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
       } else if (resolution.extraTurn) {
         // Lucky six! Same player goes again — celebrate on every client.
         sound.playExtraTurn()
-        flash(setExtraTurnFlash, player.id, TIMING.extraTurnFlashMs)
+        extraTurnFlash.trigger(player.id, TIMING.extraTurnFlashMs)
       }
     },
-    [sound, timings, flash],
+    [sound, timings, extraTurnFlash],
   )
 
   /** Hand the turn to the next active player because the current one left. */
@@ -187,86 +147,51 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
     const snap = stateRef.current
     if (snap.phase !== 'idle') return
     sound.playSkip()
-    flash(setSkipFlash, snap.currentPlayerIndex, TIMING.skipFlashMs)
+    skipFlash.trigger(snap.currentPlayerIndex, TIMING.skipFlashMs)
     dispatch({ type: 'SKIP_TURN' })
-  }, [sound, flash])
+  }, [sound, skipFlash])
 
-  const executeDecision = useCallback(
-    (decision: MatchDecision) => {
-      dispatch({ type: decision === 'continue' ? 'CONTINUE_MATCH' : 'END_MATCH' })
-    },
-    [],
-  )
+  const executeDecision = useCallback((decision: MatchDecision) => {
+    dispatch({ type: decision === 'continue' ? 'CONTINUE_MATCH' : 'END_MATCH' })
+  }, [])
 
-  // Sequence-stamped events (turns, skips, decisions) are queued and applied
-  // one at a time (handles back-to-back rolls from a 6 even if our animation
-  // lags the opponent's).
-  const queueRef = useRef<QueueEntry[]>([])
-  const drainingRef = useRef(false)
-  const drainQueue = useCallback(async () => {
-    if (drainingRef.current) return
-    drainingRef.current = true
-    try {
-      let next: QueueEntry | undefined
-      while ((next = queueRef.current.shift())) {
-        if (next.kind === 'turn') await executeTurn(next.resolution)
-        else if (next.kind === 'skip') executeSkip()
-        else executeDecision(next.decision)
-      }
-    } finally {
-      drainingRef.current = false
-    }
-  }, [executeTurn, executeSkip, executeDecision])
+  // The shared sequencing core: orders, dedupes, and drains every
+  // sequence-stamped event (turns, skips, decisions) exactly once.
+  const handlers: SequencerHandlers<TurnResolution> = {
+    executeTurn,
+    executeSkip,
+    executeDecision,
+    committedCount: () => stateRef.current.turnCount,
+    onOutOfSync: () => hooksRef.current?.onOutOfSync?.(),
+  }
+  const [sequencer] = useState(() => createTurnSequencer<TurnResolution>())
+  useEffect(() => {
+    sequencer.update(handlers)
+  })
 
   const roll = useCallback(async () => {
     const snap = stateRef.current
     if (snap.phase !== 'idle') return
-    if (rollingRef.current) return
-    // Never roll over remote turns that are still animating or queued.
-    if (drainingRef.current || queueRef.current.length > 0) return
     if (controlsPlayer !== 'all' && controlsPlayer !== snap.currentPlayerIndex) return
-
     const player = snap.players[snap.currentPlayerIndex]
     if (!player) return
-    rollingRef.current = true
+    // Never roll over remote turns that are still animating or queued, and
+    // never double-fire on a double-tap (the phase only changes next render).
+    if (!sequencer.acquireTurnLock()) return
     try {
       const resolution = resolveTurn(player.position, rollDie())
-      const seq = ++lastSeqRef.current
-      hooksRef.current?.onLocalTurn?.(resolution, seq)
-      await executeTurn(resolution)
+      hooksRef.current?.onLocalTurn?.(resolution, sequencer.claimSeq())
+      await executeTurn(resolution, sequencer.beginRun())
     } finally {
-      rollingRef.current = false
+      sequencer.releaseTurnLock()
     }
-  }, [controlsPlayer, executeTurn])
-
-  /**
-   * Shared seq bookkeeping for every remote (or remotely-replicated) event.
-   * Returns true when the event is the expected next one and was queued.
-   */
-  const enqueueSequenced = useCallback(
-    (entry: QueueEntry, seq: number): boolean => {
-      const expected = lastSeqRef.current + 1
-      // Already have this event (duplicate delivery): drop it.
-      if (seq < expected) return false
-      // An event was lost in transit. Don't apply this one (it would corrupt
-      // the state) — ask the room for a full snapshot instead.
-      if (seq > expected) {
-        hooksRef.current?.onOutOfSync?.()
-        return false
-      }
-      lastSeqRef.current = seq
-      queueRef.current.push(entry)
-      void drainQueue()
-      return true
-    },
-    [drainQueue],
-  )
+  }, [controlsPlayer, executeTurn, sequencer])
 
   const applyRemoteTurn = useCallback(
     (resolution: TurnResolution, seq: number) => {
-      enqueueSequenced({ kind: 'turn', resolution }, seq)
+      sequencer.accept({ kind: 'turn', resolution }, seq)
     },
-    [enqueueSequenced],
+    [sequencer],
   )
 
   /**
@@ -276,16 +201,16 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
    */
   const applySkip = useCallback(
     (seq: number) => {
-      enqueueSequenced({ kind: 'skip' }, seq)
+      sequencer.accept({ kind: 'skip' }, seq)
     },
-    [enqueueSequenced],
+    [sequencer],
   )
 
   const applyRemoteDecision = useCallback(
     (decision: MatchDecision, seq: number) => {
-      enqueueSequenced({ kind: 'decision', decision }, seq)
+      sequencer.accept({ kind: 'decision', decision }, seq)
     },
-    [enqueueSequenced],
+    [sequencer],
   )
 
   /** Local continue/end call (host online, anyone in hot-seat). */
@@ -294,33 +219,37 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
       const snap = stateRef.current
       if (snap.phase !== 'celebrating') return
       // Only decide from a settled state (nothing queued or animating).
-      if (drainingRef.current || queueRef.current.length > 0) return
-      if (lastSeqRef.current !== snap.turnCount) return
-      const seq = ++lastSeqRef.current
-      hooksRef.current?.onLocalDecision?.(decision, seq)
+      if (sequencer.busy()) return
+      hooksRef.current?.onLocalDecision?.(decision, sequencer.claimSeq())
       executeDecision(decision)
     },
-    [executeDecision],
+    [executeDecision, sequencer],
   )
 
-  const startGame = useCallback((players: PlayerSetup[]) => {
-    runIdRef.current++
-    queueRef.current = []
-    lastSeqRef.current = 0
+  const clearTransients = useCallback(() => {
     setActiveMove(null)
-    clearFlashes()
-    dispatch({ type: 'START_GAME', players })
-    hooksRef.current?.onStart?.(players)
-  }, [clearFlashes])
+    extraTurnFlash.clear()
+    skipFlash.clear()
+  }, [extraTurnFlash, skipFlash])
 
-  const applyRemoteStart = useCallback((players: PlayerSetup[]) => {
-    runIdRef.current++
-    queueRef.current = []
-    lastSeqRef.current = 0
-    setActiveMove(null)
-    clearFlashes()
-    dispatch({ type: 'START_GAME', players })
-  }, [clearFlashes])
+  const startGame = useCallback(
+    (players: PlayerSetup[]) => {
+      sequencer.rebase(0)
+      clearTransients()
+      dispatch({ type: 'START_GAME', players })
+      hooksRef.current?.onStart?.(players)
+    },
+    [sequencer, clearTransients],
+  )
+
+  const applyRemoteStart = useCallback(
+    (players: PlayerSetup[]) => {
+      sequencer.rebase(0)
+      clearTransients()
+      dispatch({ type: 'START_GAME', players })
+    },
+    [sequencer, clearTransients],
+  )
 
   // Append a host-approved late joiner. Non-destructive: it never cancels an
   // in-flight turn animation, so existing players keep playing without a hitch.
@@ -341,14 +270,11 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
       ended: boolean
       turnCount: number
     }) => {
-      runIdRef.current++
-      queueRef.current = []
-      lastSeqRef.current = snapshot.turnCount
-      setActiveMove(null)
-      clearFlashes()
+      sequencer.rebase(snapshot.turnCount)
+      clearTransients()
       dispatch({ type: 'LOAD_SNAPSHOT', ...snapshot })
     },
-    [clearFlashes],
+    [sequencer, clearTransients],
   )
 
   // Last player standing: every other active player left, so `winnerId` takes
@@ -357,15 +283,12 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
     (winnerId: number) => {
       const snap = stateRef.current
       if (snap.phase === 'setup' || snap.phase === 'won') return
-      runIdRef.current++
-      queueRef.current = []
-      lastSeqRef.current = snap.turnCount
-      setActiveMove(null)
-      clearFlashes()
+      sequencer.rebase(snap.turnCount)
+      clearTransients()
       dispatch({ type: 'FORFEIT_WIN', winnerId })
       sound.playWin()
     },
-    [sound, clearFlashes],
+    [sequencer, sound, clearTransients],
   )
 
   /**
@@ -374,25 +297,15 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
    * anything is in flight, i.e. the committed state is not yet final.
    */
   const syncStatus = useCallback(
-    () => ({
-      seq: lastSeqRef.current,
-      busy:
-        drainingRef.current ||
-        queueRef.current.length > 0 ||
-        rollingRef.current ||
-        lastSeqRef.current !== stateRef.current.turnCount,
-    }),
-    [],
+    () => ({ seq: sequencer.seq, busy: sequencer.busy() }),
+    [sequencer],
   )
 
   const reset = useCallback(() => {
-    runIdRef.current++
-    queueRef.current = []
-    lastSeqRef.current = 0
-    setActiveMove(null)
-    clearFlashes()
+    sequencer.rebase(0)
+    clearTransients()
     dispatch({ type: 'RESET' })
-  }, [clearFlashes])
+  }, [sequencer, clearTransients])
 
   const applyRemoteReset = reset
 
@@ -411,8 +324,8 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
     winner,
     standings,
     activeMove,
-    extraTurnFlash,
-    skipFlash,
+    extraTurnFlash: extraTurnFlash.flash,
+    skipFlash: skipFlash.flash,
     muted,
     toggleMute,
     controlsPlayer,

@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react'
-import { motion, useAnimationControls, useReducedMotion } from 'motion/react'
+import { memo, useEffect, useRef, type ReactNode } from 'react'
+import { m, useAnimationControls, useReducedMotion } from 'motion/react'
 import type { DieValue } from '../../game/types'
 
 /**
@@ -73,7 +73,17 @@ function Pips({ value }: { value: DieValue }) {
   )
 }
 
-export function Dice3D({ value, rolling, size = 84 }: Dice3DProps) {
+/** The six pip layouts never change — build each face's grid exactly once. */
+const PIP_FACES: Record<DieValue, ReactNode> = {
+  1: <Pips value={1} />,
+  2: <Pips value={2} />,
+  3: <Pips value={3} />,
+  4: <Pips value={4} />,
+  5: <Pips value={5} />,
+  6: <Pips value={6} />,
+}
+
+export const Dice3D = memo(function Dice3D({ value, rolling, size = 84 }: Dice3DProps) {
   const controls = useAnimationControls()
   const rot = useRef({ x: REST_TILT.x, y: REST_TILT.y })
   const reduced = useReducedMotion()
@@ -101,7 +111,7 @@ export function Dice3D({ value, rolling, size = 84 }: Dice3DProps) {
 
   return (
     <div className="scene-3d grid place-items-center" style={{ width: size, height: size }}>
-      <motion.div
+      <m.div
         className="relative"
         style={{ width: size, height: size, transformStyle: 'preserve-3d' }}
         initial={{ rotateX: REST_TILT.x, rotateY: REST_TILT.y }}
@@ -113,10 +123,10 @@ export function Dice3D({ value, rolling, size = 84 }: Dice3DProps) {
             className="absolute inset-0 rounded-[16%] border border-black/10 bg-linear-to-br from-white to-slate-200 shadow-inner"
             style={{ transform: face.transform(size / 2), backfaceVisibility: 'hidden' }}
           >
-            <Pips value={face.value} />
+            {PIP_FACES[face.value]}
           </div>
         ))}
-      </motion.div>
+      </m.div>
     </div>
   )
-}
+})

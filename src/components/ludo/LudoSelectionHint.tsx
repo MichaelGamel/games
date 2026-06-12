@@ -1,4 +1,4 @@
-import { motion } from 'motion/react'
+import { m } from 'motion/react'
 
 /**
  * The prompt shown during the local selection pause: more than one token can
@@ -7,7 +7,7 @@ import { motion } from 'motion/react'
  */
 export function LudoSelectionHint() {
   return (
-    <motion.div
+    <m.div
       initial={{ opacity: 0, y: -10, scale: 0.95 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -10, scale: 0.95 }}
@@ -15,15 +15,15 @@ export function LudoSelectionHint() {
       role="status"
     >
       <span className="inline-flex items-center gap-2 rounded-full bg-night-800/95 px-4 py-2 text-sm font-semibold text-white shadow-lg ring-1 ring-white/15 backdrop-blur">
-        <motion.span
+        <m.span
           aria-hidden="true"
           animate={{ y: [0, -3, 0] }}
           transition={{ duration: 0.9, repeat: Infinity, ease: 'easeInOut' }}
         >
           👆
-        </motion.span>
+        </m.span>
         Tap a glowing token to move
       </span>
-    </motion.div>
+    </m.div>
   )
 }

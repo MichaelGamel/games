@@ -1,4 +1,5 @@
-import { motion } from 'motion/react'
+import { memo } from 'react'
+import { m } from 'motion/react'
 import { TOTAL_CELLS } from '../game/config'
 import type { Phase, Player } from '../game/types'
 import { placeLabel, placeMedal } from '../lib/place'
@@ -18,7 +19,7 @@ interface PlayerPanelProps {
  * The roster. Stacked detail cards on desktop; a compact two-column chip grid
  * on mobile so the board and the roll button fit on one screen together.
  */
-export function PlayerPanel({
+export const PlayerPanel = memo(function PlayerPanel({
   players,
   currentPlayerId,
   phase,
@@ -34,7 +35,7 @@ export function PlayerPanel({
         const progress = Math.round((p.position / TOTAL_CELLS) * 100)
 
         return (
-          <motion.li
+          <m.li
             key={p.id}
             animate={{ scale: isActive ? 1.02 : 1, opacity: isActive || phase === 'won' || finished ? 1 : 0.7 }}
             transition={{ type: 'spring', stiffness: 300, damping: 24 }}
@@ -86,7 +87,7 @@ export function PlayerPanel({
 
               <div className="mt-1 hidden items-center gap-2 lg:flex">
                 <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
-                  <motion.div
+                  <m.div
                     className="h-full rounded-full"
                     style={{ background: p.color }}
                     animate={{ width: `${progress}%` }}
@@ -98,9 +99,9 @@ export function PlayerPanel({
                 </span>
               </div>
             </div>
-          </motion.li>
+          </m.li>
         )
       })}
     </ul>
   )
-}
+})

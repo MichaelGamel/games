@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { cellsInRenderOrder, cellToPercent } from '../../game/board'
 import type { ActiveMove, Phase, Player } from '../../game/types'
 import { Cell } from './Cell'
@@ -16,12 +17,34 @@ const CELLS = cellsInRenderOrder()
 const START_COORD = { x: 5, y: 105 }
 
 /**
+ * The static playing surface: the 100-cell grid and the snakes/ladders SVG.
+ * Pure geometry with no props, so it is built once at module scope — React
+ * sees the same element on every Board render and skips reconciling the whole
+ * subtree while tokens animate across it.
+ */
+const BOARD_SURFACE = (
+  <div className="absolute inset-0 overflow-hidden rounded-2xl border-4 border-board-line/70 shadow-2xl ring-1 ring-black/20">
+    <div className="grid h-full w-full grid-cols-10 grid-rows-10">
+      {CELLS.map((cell) => (
+        <Cell key={cell} cell={cell} />
+      ))}
+    </div>
+    <SnakesLaddersLayer />
+  </div>
+)
+
+/**
  * The playing surface: a clipped 10×10 grid with the snakes/ladders SVG on top,
  * and an un-clipped token layer so pawns can wait in the start lane just below
  * the board. Tokens sharing a cell are fanned out horizontally so both stay
  * visible.
  */
-export function Board({ players, activeMove, currentPlayerId, phase }: BoardProps) {
+export const Board = memo(function Board({
+  players,
+  activeMove,
+  currentPlayerId,
+  phase,
+}: BoardProps) {
   const display = players.map((p) => {
     const moving = activeMove?.playerId === p.id
     return {
@@ -49,15 +72,7 @@ export function Board({ players, activeMove, currentPlayerId, phase }: BoardProp
 
   return (
     <div className="relative aspect-square w-full">
-      {/* clipped surface: grid + connectors */}
-      <div className="absolute inset-0 overflow-hidden rounded-2xl border-4 border-board-line/70 shadow-2xl ring-1 ring-black/20">
-        <div className="grid h-full w-full grid-cols-10 grid-rows-10">
-          {CELLS.map((cell) => (
-            <Cell key={cell} cell={cell} />
-          ))}
-        </div>
-        <SnakesLaddersLayer />
-      </div>
+      {BOARD_SURFACE}
 
       {/* un-clipped token layer (start lane lives just below the board) */}
       <div className="pointer-events-none absolute inset-0">
@@ -82,4 +97,4 @@ export function Board({ players, activeMove, currentPlayerId, phase }: BoardProp
       </div>
     </div>
   )
-}
+})

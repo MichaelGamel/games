@@ -1,21 +1,14 @@
-import { useEffect } from 'react'
-import { AnimatePresence, motion } from 'motion/react'
+import { AnimatePresence, m } from 'motion/react'
 import type { GameController } from '../hooks/useSnakesAndLadders'
+import { useRollHotkey } from '../hooks/useRollHotkey'
 import { placeLabel } from '../lib/place'
 import { Board } from './board/Board'
 import { PlayerPanel } from './PlayerPanel'
 import { Controls } from './Controls'
+import { RoomBadge, type OnlineMeta } from './online/RoomBadge'
 import { cn } from '../lib/cn'
 
-export interface OnlineMeta {
-  roomCode: string
-  /** True when every player from the started lineup is still connected. */
-  everyonePresent: boolean
-  /** True while enough active players are connected to keep playing. */
-  canPlay: boolean
-  testMode: boolean
-  onLeave: () => void
-}
+export type { OnlineMeta }
 
 interface GameScreenProps {
   game: GameController
@@ -37,26 +30,14 @@ export function GameScreen({ game, online }: GameScreenProps) {
   const canRoll = game.canRoll && (!online || online.canPlay)
 
   // Keyboard roll (Space / Enter) when allowed, unless focus is on a control.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== ' ' && e.key !== 'Enter') return
-      if (e.repeat) return
-      const target = e.target as HTMLElement | null
-      if (target?.closest('button, input, textarea, a, [role="button"]')) return
-      if (!canRoll) return
-      e.preventDefault()
-      game.roll()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [game, canRoll])
+  useRollHotkey(canRoll, game.roll)
 
   const accentColor = game.currentPlayer?.color ?? '#8b5cf6'
   const luckyPlayer =
     game.extraTurnFlash != null ? (game.players[game.extraTurnFlash.playerId] ?? null) : null
 
   return (
-    <motion.div
+    <m.div
       key="game"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -133,7 +114,7 @@ export function GameScreen({ game, online }: GameScreenProps) {
       >
         {statusText(game, online)}
       </p>
-    </motion.div>
+    </m.div>
   )
 }
 
@@ -147,7 +128,7 @@ function LuckySixBanner({ name, color, isMe }: { name: string; color: string; is
   ]
   return (
     <div className="pointer-events-none absolute inset-x-0 top-1/3 z-40 flex justify-center px-4">
-      <motion.div
+      <m.div
         initial={{ scale: 0.2, y: 28, opacity: 0, rotate: -10 }}
         animate={{ scale: [0.2, 1.12, 1], y: 0, opacity: 1, rotate: [-10, 4, 0] }}
         exit={{ scale: 0.6, y: -18, opacity: 0 }}
@@ -156,7 +137,7 @@ function LuckySixBanner({ name, color, isMe }: { name: string; color: string; is
         role="status"
       >
         {sparkles.map((s, i) => (
-          <motion.span
+          <m.span
             key={i}
             className="absolute left-1/2 top-1/2 text-xl"
             style={{ x: s.x, y: s.y }}
@@ -166,16 +147,16 @@ function LuckySixBanner({ name, color, isMe }: { name: string; color: string; is
             aria-hidden="true"
           >
             ✨
-          </motion.span>
+          </m.span>
         ))}
-        <motion.span
+        <m.span
           className="absolute -top-5 left-1/2 -translate-x-1/2 text-3xl"
           animate={{ y: [0, -8, 0], rotate: [0, -16, 16, 0] }}
           transition={{ duration: 0.9, repeat: Infinity, ease: 'easeInOut' }}
           aria-hidden="true"
         >
           🎲
-        </motion.span>
+        </m.span>
         <p className="text-xl font-bold tracking-wide text-amber-300">LUCKY 6!</p>
         <p className="mt-0.5 text-sm font-semibold text-white">
           {isMe ? (
@@ -188,32 +169,7 @@ function LuckySixBanner({ name, color, isMe }: { name: string; color: string; is
             </>
           )}
         </p>
-      </motion.div>
-    </div>
-  )
-}
-
-function RoomBadge({ meta }: { meta: OnlineMeta }) {
-  return (
-    <div className="mt-1.5 flex items-center justify-center gap-2 text-xs lg:mt-2">
-      <span
-        className={cn(
-          'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-semibold',
-          meta.everyonePresent ? 'bg-emerald-500/20 text-emerald-200' : 'bg-amber-500/20 text-amber-200',
-        )}
-      >
-        <span
-          className={cn('h-2 w-2 rounded-full', meta.everyonePresent ? 'bg-emerald-400' : 'bg-amber-400')}
-          aria-hidden="true"
-        />
-        {meta.everyonePresent ? 'Connected' : 'Player away'}
-      </span>
-      <span className="rounded-full bg-white/10 px-2.5 py-1 font-mono tracking-widest text-white/80">
-        {meta.roomCode}
-      </span>
-      {meta.testMode && (
-        <span className="rounded-full bg-white/10 px-2 py-1 text-white/45">test mode</span>
-      )}
+      </m.div>
     </div>
   )
 }

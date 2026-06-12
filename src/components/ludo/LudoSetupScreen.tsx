@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { motion } from 'motion/react'
+import { m } from 'motion/react'
 import { MAX_PLAYERS, MIN_PLAYERS } from '../../game/config'
 import { DEFAULT_LUDO_PLAYERS, LUDO_COLORS } from '../../ludo/config'
 import type { PlayerSetup } from '../../ludo/ludoReducer'
@@ -63,7 +63,7 @@ export function LudoSetupScreen({ onStart, onBack }: LudoSetupScreenProps) {
     )
 
   return (
-    <motion.div
+    <m.div
       key="ludo-setup"
       variants={container}
       initial="hidden"
@@ -72,28 +72,28 @@ export function LudoSetupScreen({ onStart, onBack }: LudoSetupScreenProps) {
       className="relative z-10 flex min-h-screen flex-col items-center justify-center gap-8 px-4 py-10"
     >
       {onBack && (
-        <motion.button
+        <m.button
           variants={item}
           type="button"
           onClick={onBack}
           className="absolute left-4 top-4 rounded-lg px-3 py-1.5 text-sm text-white/70 ring-1 ring-white/15 transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
         >
           ← Menu
-        </motion.button>
+        </m.button>
       )}
 
-      <motion.header variants={item} className="text-center">
-        <motion.h1
+      <m.header variants={item} className="text-center">
+        <m.h1
           className="text-4xl font-bold tracking-tight text-white drop-shadow sm:text-6xl"
           animate={{ y: [0, -6, 0] }}
           transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
         >
           <span aria-hidden="true">🎲</span> Ludo
-        </motion.h1>
+        </m.h1>
         <p className="mt-3 text-white/70">2–4 players. Race all four tokens home.</p>
-      </motion.header>
+      </m.header>
 
-      <motion.div variants={item} className="grid w-full max-w-2xl gap-4 sm:grid-cols-2">
+      <m.div variants={item} className="grid w-full max-w-2xl gap-4 sm:grid-cols-2">
         {players.map((p, index) => (
           <div
             key={index}
@@ -200,9 +200,9 @@ export function LudoSetupScreen({ onStart, onBack }: LudoSetupScreenProps) {
             <span className="text-lg font-semibold">＋ Add player</span>
           </button>
         )}
-      </motion.div>
+      </m.div>
 
-      <motion.button
+      <m.button
         variants={item}
         type="button"
         onClick={handleStart}
@@ -211,7 +211,7 @@ export function LudoSetupScreen({ onStart, onBack }: LudoSetupScreenProps) {
         className="rounded-xl bg-linear-to-r from-grape to-grape-light px-10 py-4 text-xl font-bold text-white shadow-xl ring-1 ring-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
       >
         Start Game ▶
-      </motion.button>
-    </motion.div>
+      </m.button>
+    </m.div>
   )
 }

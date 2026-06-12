@@ -5,7 +5,7 @@
  * both `OnlineRoom` and `LudoOnlineRoom` render the identical lobby without
  * duplicating it (DRY).
  */
-import { AnimatePresence, motion } from 'motion/react'
+import { AnimatePresence, m } from 'motion/react'
 import { MAX_PLAYERS, MIN_PLAYERS, reasonText, type RejectReason } from '../../net/roster'
 import type { RoomMember, RoomStatus, Role } from '../../net/types'
 import { cn } from '../../lib/cn'
@@ -16,7 +16,7 @@ export function Notices({ notices }: { notices: { id: number; text: string }[] }
     <div className="pointer-events-none fixed inset-x-0 top-3 z-40 flex flex-col items-center gap-1.5 px-4">
       <AnimatePresence>
         {notices.map((n) => (
-          <motion.p
+          <m.p
             key={n.id}
             initial={{ opacity: 0, y: -16, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -25,7 +25,7 @@ export function Notices({ notices }: { notices: { id: number; text: string }[] }
             role="status"
           >
             {n.text}
-          </motion.p>
+          </m.p>
         ))}
       </AnimatePresence>
     </div>
@@ -44,9 +44,9 @@ export function JoinRequests({ requests, canAccept, onAccept, onReject }: JoinRe
   return (
     <div className="fixed inset-x-0 top-4 z-50 flex flex-col items-center gap-2 px-4">
       <AnimatePresence>
-        {requests.map((m) => (
-          <motion.div
-            key={m.clientId}
+        {requests.map((member) => (
+          <m.div
+            key={member.clientId}
             initial={{ opacity: 0, y: -24, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -24, scale: 0.96 }}
@@ -59,15 +59,15 @@ export function JoinRequests({ requests, canAccept, onAccept, onReject }: JoinRe
             <div className="mt-2 flex items-center gap-3">
               <span
                 className="h-7 w-7 shrink-0 rounded-full ring-2 ring-white/40"
-                style={{ background: m.color }}
+                style={{ background: member.color }}
                 aria-hidden="true"
               />
-              <span className="flex-1 truncate text-base font-semibold text-white">{m.name}</span>
+              <span className="flex-1 truncate text-base font-semibold text-white">{member.name}</span>
             </div>
             <div className="mt-3 flex gap-2">
               <button
                 type="button"
-                onClick={() => onAccept(m)}
+                onClick={() => onAccept(member)}
                 disabled={!canAccept}
                 className={cn(
                   'flex-1 rounded-lg bg-linear-to-r from-emerald-500 to-emerald-400 px-4 py-2 text-sm font-bold text-white shadow ring-1 ring-white/20 transition',
@@ -79,7 +79,7 @@ export function JoinRequests({ requests, canAccept, onAccept, onReject }: JoinRe
               </button>
               <button
                 type="button"
-                onClick={() => onReject(m)}
+                onClick={() => onReject(member)}
                 className="flex-1 rounded-lg bg-white/10 px-4 py-2 text-sm font-bold text-white/80 ring-1 ring-white/15 transition hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
               >
                 Reject
@@ -90,7 +90,7 @@ export function JoinRequests({ requests, canAccept, onAccept, onReject }: JoinRe
                 You can let players in between turns.
               </p>
             )}
-          </motion.div>
+          </m.div>
         ))}
       </AnimatePresence>
     </div>
@@ -133,7 +133,7 @@ export function WaitingRoom({
   }
 
   return (
-    <motion.div
+    <m.div
       key="waiting"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -194,7 +194,7 @@ export function WaitingRoom({
             <Roster seats={seats} myClientId={myClientId} />
 
             {role === 'host' ? (
-              <motion.button
+              <m.button
                 type="button"
                 onClick={onStart}
                 disabled={!canStart}
@@ -207,7 +207,7 @@ export function WaitingRoom({
                 )}
               >
                 {canStart ? 'Start Game ▶' : `Waiting for players… (need ${MIN_PLAYERS}+)`}
-              </motion.button>
+              </m.button>
             ) : (
               <p className="mt-5 text-sm text-white/70">Waiting for the host to start…</p>
             )}
@@ -221,7 +221,7 @@ export function WaitingRoom({
           </>
         )}
       </div>
-    </motion.div>
+    </m.div>
   )
 }
 
@@ -280,14 +280,14 @@ function RejectionCard({ reason, onBack }: { reason: RejectReason; onBack: () =>
 function PendingCard({ onCancel }: { onCancel: () => void }) {
   return (
     <>
-      <motion.p
+      <m.p
         className="text-2xl"
         animate={{ rotate: [0, 12, -12, 0] }}
         transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
         aria-hidden="true"
       >
         ✋
-      </motion.p>
+      </m.p>
       <h2 className="mt-3 text-xl font-bold text-white">Asking the host…</h2>
       <p className="mt-2 text-sm text-white/60">
         This match is already in progress. The host has been asked to let you in — hang tight.

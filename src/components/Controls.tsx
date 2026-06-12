@@ -1,4 +1,5 @@
-import { motion } from 'motion/react'
+import { memo } from 'react'
+import { m } from 'motion/react'
 import type { DieValue, Phase } from '../game/types'
 import { Dice3D } from './dice/Dice3D'
 import { cn } from '../lib/cn'
@@ -24,7 +25,7 @@ interface ControlsProps {
  * buttons, so everything fits under the board without scrolling); the
  * familiar stacked card on desktop.
  */
-export function Controls({
+export const Controls = memo(function Controls({
   phase,
   lastRoll,
   accentColor,
@@ -41,7 +42,7 @@ export function Controls({
       <Dice3D value={lastRoll} rolling={phase === 'rolling'} />
 
       <div className="flex min-w-0 flex-1 flex-col gap-2 lg:w-full lg:flex-none lg:gap-5">
-        <motion.button
+        <m.button
           type="button"
           onClick={onRoll}
           disabled={!canRoll}
@@ -59,7 +60,7 @@ export function Controls({
           }}
         >
           {rollLabel}
-        </motion.button>
+        </m.button>
 
         <div className="flex w-full items-center justify-between gap-3 text-sm">
           <button
@@ -84,4 +85,4 @@ export function Controls({
       </div>
     </div>
   )
-}
+})

@@ -1,4 +1,5 @@
-import { motion } from 'motion/react'
+import { memo } from 'react'
+import { m } from 'motion/react'
 import type { DieValue, LudoPhase } from '../../ludo/types'
 import { LudoDice } from './dice/LudoDice'
 import { cn } from '../../lib/cn'
@@ -24,7 +25,7 @@ interface LudoControlsProps {
  * mobile and a stacked card on desktop. The roll button is inert during the
  * `selecting` pause (you tap a token on the board instead).
  */
-export function LudoControls({
+export const LudoControls = memo(function LudoControls({
   phase,
   lastRoll,
   accentColor,
@@ -41,7 +42,7 @@ export function LudoControls({
       <LudoDice value={lastRoll} rolling={phase === 'rolling'} />
 
       <div className="flex min-w-0 flex-1 flex-col gap-2 lg:w-full lg:flex-none lg:gap-5">
-        <motion.button
+        <m.button
           type="button"
           onClick={onRoll}
           disabled={!canRoll}
@@ -59,7 +60,7 @@ export function LudoControls({
           }}
         >
           {rollLabel}
-        </motion.button>
+        </m.button>
 
         <div className="flex w-full items-center justify-between gap-3 text-sm">
           <button
@@ -84,4 +85,4 @@ export function LudoControls({
       </div>
     </div>
   )
-}
+})

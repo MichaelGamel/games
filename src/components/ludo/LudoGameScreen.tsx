@@ -1,27 +1,25 @@
-import { useEffect } from 'react'
-import { AnimatePresence, motion } from 'motion/react'
+import { AnimatePresence, m } from 'motion/react'
 import type { LudoController } from '../../hooks/useLudo'
+import { useRollHotkey } from '../../hooks/useRollHotkey'
 import { placeLabel } from '../../lib/place'
 import { cn } from '../../lib/cn'
 import { LudoBoard } from './board/LudoBoard'
 import { LudoPlayerPanel } from './LudoPlayerPanel'
 import { LudoControls } from './LudoControls'
 import { LudoSelectionHint } from './LudoSelectionHint'
+import { RoomBadge, type OnlineMeta } from '../online/RoomBadge'
 
-export interface LudoOnlineMeta {
-  roomCode: string
-  /** True when every player from the started lineup is still connected. */
-  everyonePresent: boolean
-  /** True while enough active players are connected to keep playing. */
-  canPlay: boolean
-  testMode: boolean
-  onLeave: () => void
-}
+/** Ludo's historical alias for the shared online-room metadata. */
+export type LudoOnlineMeta = OnlineMeta
 
 interface LudoGameScreenProps {
   game: LudoController
   online?: LudoOnlineMeta
 }
+
+/** Stable empty list so the memoized board sees an unchanged prop while no
+ *  selection is pending. */
+const NO_SELECTABLE_TOKENS: number[] = []
 
 /**
  * The in-match Ludo screen, mirroring the Snakes `GameScreen`: a non-scrolling
@@ -40,26 +38,14 @@ export function LudoGameScreen({ game, online }: LudoGameScreenProps) {
   const humanChoosing = game.phase === 'selecting' && game.isMyTurn && !currentIsBot
 
   // Keyboard roll (Space / Enter) when allowed, unless focus is on a control.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== ' ' && e.key !== 'Enter') return
-      if (e.repeat) return
-      const target = e.target as HTMLElement | null
-      if (target?.closest('button, input, textarea, a, [role="button"]')) return
-      if (!canRoll) return
-      e.preventDefault()
-      game.roll()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [game, canRoll])
+  useRollHotkey(canRoll, game.roll)
 
   const accentColor = game.currentPlayer?.color ?? '#8b5cf6'
   const lucky =
     game.extraTurnFlash != null ? (game.players[game.extraTurnFlash.playerId] ?? null) : null
 
   return (
-    <motion.div
+    <m.div
       key="ludo-game"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -94,7 +80,7 @@ export function LudoGameScreen({ game, online }: LudoGameScreenProps) {
               activeMove={game.activeMove}
               currentPlayerIndex={game.currentPlayerIndex}
               phase={game.phase}
-              selectableTokens={humanChoosing ? game.selectableTokens : []}
+              selectableTokens={humanChoosing ? game.selectableTokens : NO_SELECTABLE_TOKENS}
               onSelectToken={game.selectToken}
             />
             <AnimatePresence>
@@ -136,7 +122,7 @@ export function LudoGameScreen({ game, online }: LudoGameScreenProps) {
           {humanChoosing ? (
             <LudoSelectionHint key="hint" />
           ) : (
-            <motion.p
+            <m.p
               key="status"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -144,11 +130,11 @@ export function LudoGameScreen({ game, online }: LudoGameScreenProps) {
               className="text-center text-xs text-white/65 sm:text-sm"
             >
               {statusText(game, online)}
-            </motion.p>
+            </m.p>
           )}
         </AnimatePresence>
       </div>
-    </motion.div>
+    </m.div>
   )
 }
 
@@ -166,7 +152,7 @@ function ExtraTurnBanner({
 }) {
   return (
     <div className="pointer-events-none absolute inset-x-0 top-1/3 z-40 flex justify-center px-4">
-      <motion.div
+      <m.div
         initial={{ scale: 0.2, y: 28, opacity: 0, rotate: -10 }}
         animate={{ scale: [0.2, 1.12, 1], y: 0, opacity: 1, rotate: [-10, 4, 0] }}
         exit={{ scale: 0.6, y: -18, opacity: 0 }}
@@ -180,32 +166,7 @@ function ExtraTurnBanner({
         <p className="mt-0.5 text-sm font-semibold text-white">
           <span style={{ color }}>{name}</span> {isMe ? '— roll again!' : 'rolls again!'} 🎉
         </p>
-      </motion.div>
-    </div>
-  )
-}
-
-function RoomBadge({ meta }: { meta: LudoOnlineMeta }) {
-  return (
-    <div className="mt-1.5 flex items-center justify-center gap-2 text-xs lg:mt-2">
-      <span
-        className={cn(
-          'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-semibold',
-          meta.everyonePresent ? 'bg-emerald-500/20 text-emerald-200' : 'bg-amber-500/20 text-amber-200',
-        )}
-      >
-        <span
-          className={cn('h-2 w-2 rounded-full', meta.everyonePresent ? 'bg-emerald-400' : 'bg-amber-400')}
-          aria-hidden="true"
-        />
-        {meta.everyonePresent ? 'Connected' : 'Player away'}
-      </span>
-      <span className="rounded-full bg-white/10 px-2.5 py-1 font-mono tracking-widest text-white/80">
-        {meta.roomCode}
-      </span>
-      {meta.testMode && (
-        <span className="rounded-full bg-white/10 px-2 py-1 text-white/45">test mode</span>
-      )}
+      </m.div>
     </div>
   )
 }

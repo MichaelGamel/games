@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { motion } from 'motion/react'
+import { m } from 'motion/react'
 import { Link } from 'react-router-dom'
 import { Backdrop } from './Backdrop'
 import { LudoBoardIcon } from './ludo/LudoBoardIcon'
@@ -63,43 +63,43 @@ export function HomeHub() {
 
   return (
     <Backdrop>
-      <motion.main
+      <m.main
         variants={page}
         initial="hidden"
         animate="show"
         className="relative z-10 flex min-h-screen flex-col items-center justify-center gap-12 px-4 py-16"
       >
-        <motion.header variants={item} className="text-center">
-          <motion.h1
+        <m.header variants={item} className="text-center">
+          <m.h1
             className="text-4xl font-bold tracking-tight text-white drop-shadow sm:text-6xl"
             animate={{ y: [0, -6, 0] }}
             transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
           >
             <span aria-hidden="true">🎲</span> Robin&apos;s Games
-          </motion.h1>
+          </m.h1>
           <p className="mt-3 text-white/70">
             Pick a game — pass-and-play on one screen or online with friends.
           </p>
-        </motion.header>
+        </m.header>
 
-        <motion.ul
+        <m.ul
           variants={grid}
           className="grid w-full max-w-3xl list-none gap-5 sm:grid-cols-2"
         >
           {GAMES.map((game) => (
             <GameCard key={game.id} game={game} />
           ))}
-        </motion.ul>
-      </motion.main>
+        </m.ul>
+      </m.main>
     </Backdrop>
   )
 }
 
-const MotionLink = motion.create(Link)
+const MotionLink = m.create(Link)
 
 function GameCard({ game }: { game: Game }) {
   return (
-    <motion.li variants={item} className="flex">
+    <m.li variants={item} className="flex">
       <MotionLink
         to={game.to}
         aria-label={`Play ${game.title}`}
@@ -131,6 +131,6 @@ function GameCard({ game }: { game: Game }) {
           Play <span>→</span>
         </span>
       </MotionLink>
-    </motion.li>
+    </m.li>
   )
 }

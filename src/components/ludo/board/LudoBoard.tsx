@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { memo } from 'react'
 import { tokenPercent } from '../../../ludo/board'
 import {
   BASE_NEST_COORDS,
@@ -92,7 +92,59 @@ const CENTER_TRIANGLES: { seat: number; clip: string }[] = [
   { seat: 3, clip: 'polygon(0 100%, 100% 100%, 50% 50%)' }, // bottom
 ]
 
-export function LudoBoard({
+/**
+ * The static board surface: the 225-cell grid, the four base nests, and the
+ * center home. It depends only on the seat colors, so it is memoized on them
+ * (value-compared) and never re-renders while tokens animate across it.
+ */
+const LudoBoardSurface = memo(
+  function LudoBoardSurface({ colors }: { colors: readonly string[] }) {
+    const colorOf = (seat: number) => colors[seat] ?? EMPTY_SEAT
+
+    return (
+      <div
+        className="absolute inset-0 overflow-hidden rounded-2xl border-4 border-board-line/70 shadow-2xl ring-1 ring-black/20"
+        style={{ background: '#fcf7ea' }}
+      >
+        <div
+          className="grid h-full w-full"
+          style={{
+            gridTemplateColumns: `repeat(${LUDO_BOARD_SIZE}, 1fr)`,
+            gridTemplateRows: `repeat(${LUDO_BOARD_SIZE}, 1fr)`,
+          }}
+        >
+          {CELL_ROLES.map((role, i) => (
+            <LudoCell key={i} {...cellStyle(role, colorOf)} />
+          ))}
+        </div>
+
+        {BASE_NEST_COORDS.map((nest, seat) => (
+          <LudoBaseNest key={seat} color={colorOf(seat)} nest={nest as readonly RC[]} />
+        ))}
+
+        {/* center home: four triangles meeting at the goal */}
+        <div className="absolute left-[40%] top-[40%] h-[20%] w-[20%] overflow-hidden rounded-md ring-1 ring-black/10">
+          {CENTER_TRIANGLES.map(({ seat, clip }) => (
+            <span
+              key={seat}
+              className="absolute inset-0"
+              style={{ background: colorOf(seat), clipPath: clip }}
+              aria-hidden="true"
+            />
+          ))}
+          <span className="absolute inset-0 grid place-items-center text-[2.4vmin] leading-none drop-shadow">
+            🏠
+          </span>
+        </div>
+      </div>
+    )
+  },
+  (prev, next) =>
+    prev.colors.length === next.colors.length &&
+    prev.colors.every((c, i) => c === next.colors[i]),
+)
+
+export const LudoBoard = memo(function LudoBoard({
   players,
   activeMove,
   currentPlayerIndex,
@@ -100,20 +152,6 @@ export function LudoBoard({
   selectableTokens,
   onSelectToken,
 }: LudoBoardProps) {
-  const seatColor = (s: number) => players[s]?.color ?? EMPTY_SEAT
-  // The static grid only changes when the seat colors do.
-  const seatKey = players.map((p) => p.color).join('|')
-
-  const cells = useMemo(
-    () =>
-      CELL_ROLES.map((role, i) => {
-        const style = cellStyle(role, seatColor)
-        return <LudoCell key={i} {...style} />
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [seatKey],
-  )
-
   // Build the token list, applying the in-flight move override.
   const tokens = players.flatMap((p) =>
     p.tokens.map((committed, tokenId) => {
@@ -139,40 +177,7 @@ export function LudoBoard({
 
   return (
     <div className="relative aspect-square w-full">
-      {/* clipped surface: grid + base nests + center home */}
-      <div
-        className="absolute inset-0 overflow-hidden rounded-2xl border-4 border-board-line/70 shadow-2xl ring-1 ring-black/20"
-        style={{ background: '#fcf7ea' }}
-      >
-        <div
-          className="grid h-full w-full"
-          style={{
-            gridTemplateColumns: `repeat(${LUDO_BOARD_SIZE}, 1fr)`,
-            gridTemplateRows: `repeat(${LUDO_BOARD_SIZE}, 1fr)`,
-          }}
-        >
-          {cells}
-        </div>
-
-        {BASE_NEST_COORDS.map((nest, seat) => (
-          <LudoBaseNest key={seat} color={seatColor(seat)} nest={nest as readonly RC[]} />
-        ))}
-
-        {/* center home: four triangles meeting at the goal */}
-        <div className="absolute left-[40%] top-[40%] h-[20%] w-[20%] overflow-hidden rounded-md ring-1 ring-black/10">
-          {CENTER_TRIANGLES.map(({ seat, clip }) => (
-            <span
-              key={seat}
-              className="absolute inset-0"
-              style={{ background: seatColor(seat), clipPath: clip }}
-              aria-hidden="true"
-            />
-          ))}
-          <span className="absolute inset-0 grid place-items-center text-[2.4vmin] leading-none drop-shadow">
-            🏠
-          </span>
-        </div>
-      </div>
+      <LudoBoardSurface colors={players.map((p) => p.color)} />
 
       {/* un-clipped token layer */}
       <div className="pointer-events-none absolute inset-0">
@@ -186,6 +191,7 @@ export function LudoBoard({
           return (
             <LudoToken
               key={`${t.seat}-${t.tokenId}`}
+              tokenId={t.tokenId}
               name={t.name}
               color={t.color}
               x={t.x + dx}
@@ -194,7 +200,7 @@ export function LudoBoard({
               isMoving={t.moving}
               isCurrent={live && t.seat === currentPlayerIndex}
               selectable={selectable}
-              onSelect={() => onSelectToken(t.tokenId)}
+              onSelect={onSelectToken}
               z={t.moving ? 50 : selectable ? 40 : t.seat === currentPlayerIndex ? 30 : 20}
               size={TOKEN_SIZE}
             />
@@ -203,19 +209,19 @@ export function LudoBoard({
       </div>
     </div>
   )
-}
+})
 
 /** Resolve a cell's background / border / star from its role + the seat colors. */
 function cellStyle(
   role: CellRole,
-  seatColor: (s: number) => string,
+  colorOf: (seat: number) => string,
 ): { background: string; bordered: boolean; star: boolean } {
   switch (role.kind) {
     case 'base':
-      return { background: `${seatColor(role.seat)}2e`, bordered: false, star: false }
+      return { background: `${colorOf(role.seat)}2e`, bordered: false, star: false }
     case 'home':
     case 'start':
-      return { background: seatColor(role.seat), bordered: true, star: false }
+      return { background: colorOf(role.seat), bordered: true, star: false }
     case 'safe':
       return { background: '#ffffff', bordered: true, star: true }
     case 'ring':

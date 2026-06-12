@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { AnimatePresence, motion } from 'motion/react'
+import { AnimatePresence, m } from 'motion/react'
 
 interface ConfirmLeaveDialogProps {
   open: boolean
@@ -35,7 +35,7 @@ export function ConfirmLeaveDialog({ open, onConfirm, onCancel }: ConfirmLeaveDi
   return (
     <AnimatePresence>
       {open && (
-        <motion.div
+        <m.div
           className="fixed inset-0 z-[60] grid place-items-center bg-black/60 px-4 backdrop-blur-sm"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -46,7 +46,7 @@ export function ConfirmLeaveDialog({ open, onConfirm, onCancel }: ConfirmLeaveDi
           aria-labelledby="leave-confirm-title"
           aria-describedby="leave-confirm-body"
         >
-          <motion.div
+          <m.div
             className="relative z-10 w-full max-w-sm rounded-3xl bg-night-800 p-8 text-center shadow-2xl ring-1 ring-white/15"
             initial={{ scale: 0.7, y: 30, opacity: 0 }}
             animate={{ scale: 1, y: 0, opacity: 1 }}
@@ -55,14 +55,14 @@ export function ConfirmLeaveDialog({ open, onConfirm, onCancel }: ConfirmLeaveDi
             // Clicks inside the card must not fall through to the backdrop.
             onClick={(e) => e.stopPropagation()}
           >
-            <motion.div
+            <m.div
               className="text-7xl"
               animate={{ rotate: [0, -8, 8, -5, 0], y: [0, -4, 0] }}
               transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
               aria-hidden="true"
             >
               😢
-            </motion.div>
+            </m.div>
 
             <h2 id="leave-confirm-title" className="mt-4 text-2xl font-bold text-white">
               Leaving so soon?
@@ -72,7 +72,7 @@ export function ConfirmLeaveDialog({ open, onConfirm, onCancel }: ConfirmLeaveDi
             </p>
 
             <div className="mt-7 flex flex-col gap-3">
-              <motion.button
+              <m.button
                 ref={stayRef}
                 type="button"
                 onClick={onCancel}
@@ -81,7 +81,7 @@ export function ConfirmLeaveDialog({ open, onConfirm, onCancel }: ConfirmLeaveDi
                 className="rounded-xl bg-linear-to-r from-grape to-grape-light px-6 py-3 text-lg font-bold text-white shadow-lg ring-1 ring-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
               >
                 Keep Playing 🎲
-              </motion.button>
+              </m.button>
               <button
                 type="button"
                 onClick={onConfirm}
@@ -90,8 +90,8 @@ export function ConfirmLeaveDialog({ open, onConfirm, onCancel }: ConfirmLeaveDi
                 Leave Game
               </button>
             </div>
-          </motion.div>
-        </motion.div>
+          </m.div>
+        </m.div>
       )}
     </AnimatePresence>
   )

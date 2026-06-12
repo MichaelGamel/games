@@ -1,4 +1,4 @@
-import { motion } from 'motion/react'
+import { m } from 'motion/react'
 import { placeLabel, placeMedal, type PodiumPlayer } from '../lib/place'
 import { Confetti } from './Confetti'
 
@@ -29,7 +29,7 @@ export function WinnerOverlay({
   const single = standings.length === 1
 
   return (
-    <motion.div
+    <m.div
       className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-4 backdrop-blur-sm"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -40,21 +40,21 @@ export function WinnerOverlay({
     >
       <Confetti />
 
-      <motion.div
+      <m.div
         className="relative z-10 w-full max-w-sm rounded-3xl bg-night-800 p-8 text-center shadow-2xl ring-1 ring-white/15"
         initial={{ scale: 0.7, y: 30, opacity: 0 }}
         animate={{ scale: 1, y: 0, opacity: 1 }}
         exit={{ scale: 0.8, opacity: 0 }}
         transition={{ type: 'spring', stiffness: 260, damping: 20 }}
       >
-        <motion.div
+        <m.div
           className="text-7xl"
           animate={{ y: [0, -12, 0], rotate: [0, -8, 8, 0] }}
           transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
           aria-hidden="true"
         >
           🏆
-        </motion.div>
+        </m.div>
 
         <h2 className="mt-4 text-3xl font-bold text-white">
           {single ? 'We have a winner!' : 'Final standings!'}
@@ -67,7 +67,7 @@ export function WinnerOverlay({
         ) : (
           <ol className="mt-5 flex flex-col gap-2" aria-label="Final standings">
             {standings.map((p, rank) => (
-              <motion.li
+              <m.li
                 key={p.id}
                 initial={{ opacity: 0, x: -24 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -99,7 +99,7 @@ export function WinnerOverlay({
                 <span className="shrink-0 text-sm font-semibold text-white/60">
                   {placeLabel(rank)}
                 </span>
-              </motion.li>
+              </m.li>
             ))}
           </ol>
         )}
@@ -108,7 +108,7 @@ export function WinnerOverlay({
 
         <div className="mt-7 flex flex-col gap-3">
           {onPlayAgain && (
-            <motion.button
+            <m.button
               type="button"
               onClick={onPlayAgain}
               whileHover={{ scale: 1.04 }}
@@ -116,7 +116,7 @@ export function WinnerOverlay({
               className="rounded-xl bg-linear-to-r from-grape to-grape-light px-6 py-3 text-lg font-bold text-white shadow-lg ring-1 ring-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
             >
               Play Again
-            </motion.button>
+            </m.button>
           )}
           <button
             type="button"
@@ -126,7 +126,7 @@ export function WinnerOverlay({
             {secondaryLabel}
           </button>
         </div>
-      </motion.div>
-    </motion.div>
+      </m.div>
+    </m.div>
   )
 }

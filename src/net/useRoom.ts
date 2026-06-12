@@ -43,6 +43,10 @@ export interface RoomApi<R = TurnResolution, S = number> {
   setInGame: (inGame: boolean) => void
 }
 
+// Whether any transport is available is a build-time fact: Supabase keys in
+// production, or the BroadcastChannel fallback in dev.
+const hasTransport = isSupabaseConfigured || import.meta.env.DEV
+
 const genId = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
@@ -55,41 +59,36 @@ export function useRoom<R = TurnResolution, S = number>({
   onMessage,
   channelPrefix,
 }: UseRoomArgs<R, S>): RoomApi<R, S> {
-  const [status, setStatus] = useState<RoomStatus>('connecting')
+  const [status, setStatus] = useState<RoomStatus>(hasTransport ? 'connecting' : 'error')
   const [members, setMembers] = useState<RoomMember[]>([])
   const transportRef = useRef<Transport<R, S> | null>(null)
 
-  // Stable identity for this connection, created once.
-  const idRef = useRef<string>('')
-  if (!idRef.current) idRef.current = genId()
-  const joinedAtRef = useRef<number>(0)
-  if (!joinedAtRef.current) joinedAtRef.current = Date.now()
+  // Stable identity for this connection, minted once per mount.
+  const [identity] = useState(() => ({ clientId: genId(), joinedAt: Date.now() }))
 
-  // Keep callbacks/profile fresh without re-subscribing the channel.
+  // Keep the callback/profile fresh without re-subscribing the channel. Synced
+  // after each commit; messages only arrive via transport callbacks, which run
+  // long after the effect has.
   const onMessageRef = useRef(onMessage)
-  onMessageRef.current = onMessage
   const profileRef = useRef(profile)
-  profileRef.current = profile
+  useEffect(() => {
+    onMessageRef.current = onMessage
+    profileRef.current = profile
+  })
 
   const testMode = !isSupabaseConfigured
 
   useEffect(() => {
-    const factory: TransportFactory<R, S> | null = isSupabaseConfigured
+    if (!hasTransport) return
+    const factory: TransportFactory<R, S> = isSupabaseConfigured
       ? createSupabaseTransport
-      : import.meta.env.DEV
-        ? createBroadcastTransport
-        : null
-
-    if (!factory) {
-      setStatus('error')
-      return
-    }
+      : createBroadcastTransport
 
     const transport = factory({
       code,
       role,
-      clientId: idRef.current,
-      joinedAt: joinedAtRef.current,
+      clientId: identity.clientId,
+      joinedAt: identity.joinedAt,
       profile: profileRef.current,
       channelPrefix,
       handlers: {
@@ -105,10 +104,10 @@ export function useRoom<R = TurnResolution, S = number>({
       transportRef.current = null
       setMembers([])
     }
-  }, [code, role, channelPrefix])
+  }, [code, role, channelPrefix, identity])
 
   const send = useCallback((msg: RoomMessage<R, S>) => transportRef.current?.send(msg), [])
   const setInGame = useCallback((inGame: boolean) => transportRef.current?.setInGame(inGame), [])
 
-  return { status, members, clientId: idRef.current, testMode, send, setInGame }
+  return { status, members, clientId: identity.clientId, testMode, send, setInGame }
 }

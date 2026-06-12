@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { OnlineLobby, type LobbyDraft, type RoomParams } from './OnlineLobby'
 import { OnlineRoom } from './OnlineRoom'
 
@@ -7,15 +7,15 @@ export function OnlineGame({ onExit }: { onExit: () => void }) {
   const [params, setParams] = useState<RoomParams | null>(null)
   // Remember the last lobby entries so a bounced-back joiner (name/color taken,
   // room full…) returns with their values preserved.
-  const draftRef = useRef<LobbyDraft | undefined>(undefined)
+  const [draft, setDraft] = useState<LobbyDraft | undefined>(undefined)
 
   if (!params) {
     return (
       <OnlineLobby
         onBack={onExit}
-        initial={draftRef.current}
-        onStart={(next, draft) => {
-          draftRef.current = draft
+        initial={draft}
+        onStart={(next, nextDraft) => {
+          setDraft(nextDraft)
           setParams(next)
         }}
       />

@@ -1,4 +1,5 @@
-import { motion } from 'motion/react'
+import { memo } from 'react'
+import { m } from 'motion/react'
 import { PROGRESS_BASE, PROGRESS_GOAL, TOKENS_PER_PLAYER } from '../../ludo/config'
 import type { LudoPhase, LudoPlayer } from '../../ludo/types'
 import { placeLabel, placeMedal } from '../../lib/place'
@@ -19,7 +20,7 @@ interface LudoPlayerPanelProps {
  * compact two-column chip grid on mobile. Each player shows four token pips
  * (base / on-board / home) and a "home n/4" progress bar.
  */
-export function LudoPlayerPanel({
+export const LudoPlayerPanel = memo(function LudoPlayerPanel({
   players,
   currentPlayerIndex,
   phase,
@@ -36,7 +37,7 @@ export function LudoPlayerPanel({
         const progress = Math.round((home / TOKENS_PER_PLAYER) * 100)
 
         return (
-          <motion.li
+          <m.li
             key={p.id}
             animate={{
               scale: isActive ? 1.02 : 1,
@@ -114,7 +115,7 @@ export function LudoPlayerPanel({
               </div>
 
               <div className="mt-1.5 hidden h-1.5 overflow-hidden rounded-full bg-white/10 lg:block">
-                <motion.div
+                <m.div
                   className="h-full rounded-full"
                   style={{ background: p.color }}
                   animate={{ width: `${progress}%` }}
@@ -122,9 +123,9 @@ export function LudoPlayerPanel({
                 />
               </div>
             </div>
-          </motion.li>
+          </m.li>
         )
       })}
     </ul>
   )
-}
+})

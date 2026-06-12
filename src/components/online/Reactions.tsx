@@ -8,22 +8,13 @@
  * GameScreen stays free of any online-only chrome.
  */
 import { useState } from 'react'
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { AnimatePresence, m, useReducedMotion } from 'motion/react'
+import type { FloatingReaction } from '../../net/useOnlineMatch'
+
+export type { FloatingReaction }
 
 /** The quick-react palette. */
 const REACTION_EMOJIS = ['👍', '😂', '😮', '😢', '🎉', '🔥'] as const
-
-/** One reaction currently animating on screen. */
-export interface FloatingReaction {
-  id: string
-  emoji: string
-  /** Sender's display name, shown beneath the emoji so you know who reacted. */
-  name: string
-  /** Sender's token color, for a soft glow behind the emoji and the name chip. */
-  color: string
-  /** Horizontal position as a percentage across the viewport. */
-  left: number
-}
 
 /** Corner picker: a button that pops a column of emoji upward. */
 export function ReactionBar({ onReact }: { onReact: (emoji: string) => void }) {
@@ -33,7 +24,7 @@ export function ReactionBar({ onReact }: { onReact: (emoji: string) => void }) {
     <div className="pointer-events-auto fixed bottom-24 right-3 z-30 flex flex-col items-end gap-2 lg:bottom-8 lg:right-8">
       <AnimatePresence>
         {open && (
-          <motion.div
+          <m.div
             initial={{ opacity: 0, y: 12, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.9 }}
@@ -54,7 +45,7 @@ export function ReactionBar({ onReact }: { onReact: (emoji: string) => void }) {
                 {emoji}
               </button>
             ))}
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
 
@@ -79,7 +70,7 @@ export function ReactionLayer({ reactions }: { reactions: FloatingReaction[] }) 
     <div className="pointer-events-none fixed inset-0 z-30 overflow-hidden" aria-hidden="true">
       <AnimatePresence>
         {reactions.map((r) => (
-          <motion.div
+          <m.div
             key={r.id}
             className="absolute bottom-28 -translate-x-1/2 lg:bottom-24"
             style={{ left: `${r.left}%` }}
@@ -107,7 +98,7 @@ export function ReactionLayer({ reactions }: { reactions: FloatingReaction[] }) 
                 {r.name}
               </span>
             </span>
-          </motion.div>
+          </m.div>
         ))}
       </AnimatePresence>
     </div>

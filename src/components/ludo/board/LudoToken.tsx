@@ -1,9 +1,12 @@
-import { motion, useReducedMotion, type Transition } from 'motion/react'
+import { memo } from 'react'
+import { m, useReducedMotion, type Transition } from 'motion/react'
 import { cn } from '../../../lib/cn'
 
 export type LudoMoveKind = 'step' | 'release' | 'home'
 
 interface LudoTokenProps {
+  /** This token's index within its seat (0..3); passed back to `onSelect`. */
+  tokenId: number
   /** Player name — its initial is shown on the pawn. */
   name: string
   color: string
@@ -18,7 +21,7 @@ interface LudoTokenProps {
   isCurrent: boolean
   /** The player may tap this token to move it (selection pause). */
   selectable: boolean
-  onSelect: () => void
+  onSelect: (tokenId: number) => void
   /** Stacking order so the active / selectable token rides on top. */
   z: number
   /** Pawn diameter as a board percentage. */
@@ -26,12 +29,16 @@ interface LudoTokenProps {
 }
 
 /**
- * A Ludo pawn. The outer `motion.div` owns *position* (animated to the target
+ * A Ludo pawn. The outer `m.div` owns *position* (animated to the target
  * cell); the inner owns *flourish* (hop lift, base-pop, home sparkle, or the
  * idle bounce while selectable) so transforms never fight the centering
  * translate. A selectable token is a real focusable button.
+ *
+ * Memoized: all props are primitives or stable, so while one pawn animates the
+ * other fifteen skip re-rendering entirely.
  */
-export function LudoToken({
+export const LudoToken = memo(function LudoToken({
+  tokenId,
   name,
   color,
   x,
@@ -86,7 +93,7 @@ export function LudoToken({
   )
 
   return (
-    <motion.div
+    <m.div
       className="absolute"
       style={{
         x: '-50%',
@@ -100,7 +107,7 @@ export function LudoToken({
       animate={{ left: `${x}%`, top: `${y}%` }}
       transition={positionTransition}
     >
-      <motion.div className="relative h-full w-full" animate={inner} transition={innerTransition}>
+      <m.div className="relative h-full w-full" animate={inner} transition={innerTransition}>
         {isCurrent && (
           <span
             className="absolute inset-[-24%] rounded-full opacity-70 blur-[2px]"
@@ -111,7 +118,7 @@ export function LudoToken({
         {selectable ? (
           <button
             type="button"
-            onClick={onSelect}
+            onClick={() => onSelect(tokenId)}
             aria-label={`Move ${name}'s token`}
             className={discClass}
             style={discStyle}
@@ -123,7 +130,7 @@ export function LudoToken({
             {initial}
           </div>
         )}
-      </motion.div>
-    </motion.div>
+      </m.div>
+    </m.div>
   )
-}
+})
