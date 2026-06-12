@@ -1,6 +1,8 @@
+import type { ReactNode } from 'react'
 import { motion } from 'motion/react'
 import { Link } from 'react-router-dom'
 import { Backdrop } from './Backdrop'
+import { LudoBoardIcon } from './ludo/LudoBoardIcon'
 import { useDocumentMeta } from '../lib/useDocumentMeta'
 import { cn } from '../lib/cn'
 
@@ -9,7 +11,9 @@ interface Game {
   id: string
   title: string
   tagline: string
-  emoji: string
+  /** The card's visual mark — either an emoji or a custom icon (`icon` wins). */
+  emoji?: string
+  icon?: ReactNode
   /** Route the card links to. */
   to: string
   /** Tailwind gradient classes for the card's hover glow. */
@@ -29,7 +33,7 @@ const GAMES: Game[] = [
     id: 'ludo',
     title: 'Ludo',
     tagline: 'Get all four tokens home — capture, block and roll a six.',
-    emoji: '🎲',
+    icon: <LudoBoardIcon className="h-16 w-16 drop-shadow" />,
     to: '/ludo',
     accent: 'from-grape/35 via-transparent to-grape-light/25',
   },
@@ -115,8 +119,8 @@ function GameCard({ game }: { game: Game }) {
             game.accent,
           )}
         />
-        <span className="relative text-6xl transition-transform duration-300 group-hover:scale-110">
-          {game.emoji}
+        <span className="relative transition-transform duration-300 group-hover:scale-110">
+          {game.icon ?? <span className="text-6xl">{game.emoji}</span>}
         </span>
         <span className="relative text-2xl font-bold text-white">{game.title}</span>
         <span className="relative text-sm text-white/60">{game.tagline}</span>

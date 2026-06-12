@@ -1,17 +1,18 @@
 import { motion } from 'motion/react'
-import type { Player } from '../game/types'
-import { placeLabel, placeMedal } from '../lib/place'
+import { placeLabel, placeMedal, type PodiumPlayer } from '../lib/place'
 import { Confetti } from './Confetti'
 
 interface CelebrationOverlayProps {
-  /** The player who just reached the final cell. */
-  player: Player
+  /** The player who just secured a podium spot. */
+  player: PodiumPlayer
   /** 0-based podium rank they secured (0 = first place). */
   rank: number
   /** Whether this client may choose to continue or end the match. */
   canDecide: boolean
   /** Who everyone else is waiting on (shown when `canDecide` is false). */
   waitingFor: string
+  /** What the finisher just achieved (defaults to the Snakes phrasing). */
+  message?: string
   onContinue: () => void
   onEnd: () => void
 }
@@ -25,6 +26,7 @@ export function CelebrationOverlay({
   rank,
   canDecide,
   waitingFor,
+  message = 'made it to 100! 🎉',
   onContinue,
   onEnd,
 }: CelebrationOverlayProps) {
@@ -60,7 +62,7 @@ export function CelebrationOverlay({
           {placeLabel(rank)} place!
         </h2>
         <p className="mt-2 text-xl font-semibold" style={{ color: player.color }}>
-          {player.name} made it to 100! 🎉
+          {player.name} {message}
         </p>
         <p className="mt-2 text-sm text-white/60">The race for the next spot is still on.</p>
 

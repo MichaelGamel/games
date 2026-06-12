@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence } from 'motion/react'
-import { useSnakesAndLadders } from '../../hooks/useSnakesAndLadders'
-import { useUnloadGuard } from '../../hooks/useUnloadGuard'
-import { useRoom } from '../../net/useRoom'
+import { useLudo } from '../../../hooks/useLudo'
+import { useUnloadGuard } from '../../../hooks/useUnloadGuard'
+import { useRoom } from '../../../net/useRoom'
 import {
   MAX_PLAYERS,
   MIN_PLAYERS,
   computeRoster,
   orderMembers,
   type RejectReason,
-} from '../../net/roster'
+} from '../../../net/roster'
 import type {
   PlayerProfile,
   RoomMember,
@@ -17,15 +17,21 @@ import type {
   Role,
   RunningSnapshot,
   StartPlayer,
-} from '../../net/types'
-import { GameScreen } from '../GameScreen'
-import { WinnerOverlay } from '../WinnerOverlay'
-import { CelebrationOverlay } from '../CelebrationOverlay'
-import { ReactionBar, ReactionLayer, type FloatingReaction } from './Reactions'
-import { JoinRequests, Notices, WaitingRoom } from './RoomChrome'
-import { soundEngine } from '../../audio/soundEngine'
+} from '../../../net/types'
+import { TOKENS_PER_PLAYER, PROGRESS_BASE } from '../../../ludo/config'
+import type { LudoSeatState, LudoTurnResolution } from '../../../ludo/types'
+import { LudoGameScreen } from '../LudoGameScreen'
+import { WinnerOverlay } from '../../WinnerOverlay'
+import { CelebrationOverlay } from '../../CelebrationOverlay'
+import { ReactionBar, ReactionLayer, type FloatingReaction } from '../../online/Reactions'
+import { JoinRequests, Notices, WaitingRoom } from '../../online/RoomChrome'
+import { soundEngine } from '../../../audio/soundEngine'
 
-interface OnlineRoomProps {
+/** Ludo's transport payloads — the generic net layer is parameterised over these. */
+type Msg = RoomMessage<LudoTurnResolution, LudoSeatState>
+type Snapshot = RunningSnapshot<LudoSeatState>
+
+interface LudoOnlineRoomProps {
   code: string
   role: Role
   profile: PlayerProfile
@@ -36,8 +42,7 @@ interface OnlineRoomProps {
 const SYNC_PING_MS = 4000
 /** Minimum spacing between our own `sync-request` broadcasts. */
 const SYNC_REQUEST_THROTTLE_MS = 1500
-/** How long every other active player must stay gone before the last one wins.
- *  Absorbs brief presence flickers while someone's connection re-establishes. */
+/** How long every other active player must stay gone before the last one wins. */
 const FORFEIT_GRACE_MS = 5000
 /** How long the current player must stay gone before their turn is skipped. */
 const SKIP_GRACE_MS = 4000
@@ -47,36 +52,37 @@ const NOTICE_MS = 4000
 const REACTION_MS = 2600
 /** Minimum spacing between our own reaction sends (anti-spam). */
 const REACTION_THROTTLE_MS = 350
+/** Separate channel namespace so Snakes and Ludo never cross-talk on one code. */
+const LUDO_CHANNEL_PREFIX = 'lr-room'
 
-type SyncPing = Extract<RoomMessage, { event: 'sync-ping' }>
-type SyncState = Extract<RoomMessage, { event: 'sync-state' }>
+const freshTokens = () => Array<number>(TOKENS_PER_PLAYER).fill(PROGRESS_BASE)
+const tokensEqual = (a: number[], b: number[] | undefined) =>
+  b != null && a.length === b.length && a.every((t, i) => t === b[i])
+
+type SyncPing = Extract<Msg, { event: 'sync-ping' }>
+type SyncState = Extract<Msg, { event: 'sync-state' }>
 
 /**
- * One online match. Owns both the game controller and the room connection and
- * wires them together: local rolls/starts are broadcast; incoming messages are
- * applied as remote turns/starts. The host chooses when to start (so players can
- * keep joining up to {@link MAX_PLAYERS}); every client locates its own seat in
- * the authoritative start payload by clientId.
+ * One online Ludo match — the Ludo counterpart of `OnlineRoom`. Owns the game
+ * controller and the room connection and wires them together: local rolls (after
+ * any selection), skips, and decisions are broadcast; incoming messages replay
+ * as remote events. The entire self-healing sync, host migration, late-joiner
+ * approval, presence skip/forfeit, and lobby chrome are identical to Snakes;
+ * only the per-turn resolution and per-seat snapshot payloads differ.
  */
-export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
-  // This client's seat (player index). Unknown until the match starts.
+export function LudoOnlineRoom({ code, role, profile, onLeave }: LudoOnlineRoomProps) {
   const [seat, setSeat] = useState<number | null>(null)
   const [startedPlayers, setStartedPlayers] = useState<StartPlayer[] | null>(null)
   const startedRef = useRef<StartPlayer[] | null>(null)
-  const sendRef = useRef<((m: RoomMessage) => void) | null>(null)
-  const handleMessageRef = useRef<(m: RoomMessage) => void>(() => {})
-  // Host-only: late joiners we have already turned down, so they drop out of the
-  // request prompt even though they stay connected.
+  const sendRef = useRef<((m: Msg) => void) | null>(null)
+  const handleMessageRef = useRef<(m: Msg) => void>(() => {})
   const [declinedIds, setDeclinedIds] = useState<ReadonlySet<string>>(() => new Set())
-  // Late joiner: the host declined our request to join the running match.
   const [declined, setDeclined] = useState(false)
-  // Which start/restart generation we are on; stamped on turns so a stale or
-  // missed `start` is detectable.
   const matchIdRef = useRef(0)
   const lastSyncRequestAtRef = useRef(0)
   const requestSyncRef = useRef<() => void>(() => {})
 
-  const game = useSnakesAndLadders({
+  const game = useLudo({
     controlsPlayer: seat ?? -1,
     hooks: {
       onLocalTurn: (resolution, seq) =>
@@ -87,17 +93,16 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
     },
   })
 
-  const room = useRoom({
+  const room = useRoom<LudoTurnResolution, LudoSeatState>({
     code,
     role,
     profile,
+    channelPrefix: LUDO_CHANNEL_PREFIX,
     onMessage: (msg) => handleMessageRef.current(msg),
   })
   sendRef.current = room.send
   const myClientId = room.clientId
 
-  // Warn before closing/refreshing/navigating away while a match is live, so a
-  // player doesn't drop their friends mid-game by accident.
   useUnloadGuard(game.phase !== 'setup' && game.phase !== 'won')
 
   // Lock in a started match: find our seat, remember the lineup, flag presence.
@@ -111,10 +116,8 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
     game.applyRemoteStart(players.map(({ name, color }) => ({ name, color })))
   }
 
-  // Replace our whole view of the match with an authoritative snapshot. Used by
-  // an approved late joiner (it never saw `start`) and by any client recovering
-  // from a missed message.
-  const adoptSnapshot = (snapshot: RunningSnapshot) => {
+  // Replace our whole view of the match with an authoritative snapshot.
+  const adoptSnapshot = (snapshot: Snapshot) => {
     matchIdRef.current = snapshot.matchId
     startedRef.current = snapshot.lineup
     setStartedPlayers(snapshot.lineup)
@@ -125,7 +128,7 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
       players: snapshot.lineup.map((p, i) => ({
         name: p.name,
         color: p.color,
-        position: snapshot.positions[i] ?? 0,
+        tokens: snapshot.positions[i]?.tokens ?? freshTokens(),
       })),
       currentPlayerIndex: snapshot.currentPlayerIndex,
       lastRoll: snapshot.lastRoll,
@@ -133,13 +136,18 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
       awaitingDecision: snapshot.awaitingDecision,
       ended: snapshot.ended,
       turnCount: snapshot.turnCount,
+      // Only the seat about to roll carries a meaningful six-chain count.
+      consecutiveSixes: snapshot.positions[snapshot.currentPlayerIndex]?.consecutiveSixes ?? 0,
     })
   }
 
   /** Capture this client's settled game as an authoritative snapshot. */
-  const buildSnapshot = (lineup: StartPlayer[]): RunningSnapshot => ({
+  const buildSnapshot = (lineup: StartPlayer[]): Snapshot => ({
     lineup,
-    positions: lineup.map((_, i) => game.players[i]?.position ?? 0),
+    positions: lineup.map((_, i) => ({
+      tokens: game.players[i] ? [...game.players[i].tokens] : freshTokens(),
+      consecutiveSixes: i === game.currentPlayerIndex ? game.consecutiveSixes : 0,
+    })),
     currentPlayerIndex: game.currentPlayerIndex,
     lastRoll: game.lastRoll,
     finishedOrder: game.finishedOrder,
@@ -153,10 +161,7 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
   const isSettledPhase =
     game.phase === 'idle' || game.phase === 'celebrating' || game.phase === 'won'
 
-  // Apply a host-approved late joiner. The approved client itself rebuilds the
-  // whole match from the snapshot; everyone else simply appends the newcomer to
-  // their lineup. Idempotent against duplicate delivery.
-  const applyAddPlayer = (newPlayer: StartPlayer, snapshot: RunningSnapshot) => {
+  const applyAddPlayer = (newPlayer: StartPlayer, snapshot: Snapshot) => {
     if (newPlayer.clientId === myClientId) {
       adoptSnapshot(snapshot)
       return
@@ -178,8 +183,6 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
     sendRef.current?.({ event: 'sync-request', clientId: myClientId })
   }
 
-  // Answer a lagging client with our settled state. Only seated players get
-  // answers — a pending late joiner must wait for the host's approval.
   const sendStateTo = (toClientId: string) => {
     const lineup = startedRef.current
     if (!lineup?.some((p) => p.clientId === toClientId)) return
@@ -197,14 +200,11 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
     msg.currentPlayerIndex === game.currentPlayerIndex &&
     msg.winnerId === game.winnerId &&
     msg.positions.length === game.players.length &&
-    msg.positions.every((pos, i) => pos === game.players[i].position)
+    msg.positions.every((s, i) => tokensEqual(s.tokens, game.players[i].tokens))
 
   const handleSyncPing = (msg: SyncPing) => {
     if (msg.clientId === myClientId) return
     if (!startedRef.current) {
-      // A match is running that we have no state for — we most likely missed
-      // `start`. If we're actually seated, someone will answer; pending late
-      // joiners are filtered out by sendStateTo's lineup check.
       requestSync()
       return
     }
@@ -213,11 +213,9 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
 
     const { seq, busy } = game.syncStatus()
     if (msg.seq > seq) return requestSync()
-    if (busy) return // compare settled states only; the next ping catches up
+    if (busy) return
     if (msg.seq < seq) return sendStateTo(msg.clientId)
 
-    // Same match, same turn count, both settled — states must agree. If they
-    // diverged anyway (e.g. a late-join applied mid-animation), the host wins.
     if (pingMatchesLocal(msg)) return
     if (msg.role === 'host' && role !== 'host') requestSync()
     else if (role === 'host') sendStateTo(msg.clientId)
@@ -230,7 +228,6 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
     const ahead =
       snapshot.matchId > matchIdRef.current ||
       (snapshot.matchId === matchIdRef.current && snapshot.turnCount > seq)
-    // Host tie-break: same turn count but our states diverged.
     const hostFix =
       msg.fromHost &&
       role !== 'host' &&
@@ -240,7 +237,7 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
       (snapshot.currentPlayerIndex !== game.currentPlayerIndex ||
         snapshot.finishedOrder.join() !== game.finishedOrder.join() ||
         snapshot.positions.length !== game.players.length ||
-        snapshot.positions.some((pos, i) => pos !== game.players[i]?.position))
+        snapshot.positions.some((s, i) => !tokensEqual(s.tokens, game.players[i]?.tokens)))
     if (ahead || hostFix) adoptSnapshot(snapshot)
   }
 
@@ -263,19 +260,17 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
       const now = Date.now()
       if (now - lastReactionAtRef.current < REACTION_THROTTLE_MS) return
       lastReactionAtRef.current = now
-      // Broadcasts don't echo back to the sender, so render our own locally.
       sendRef.current?.({ event: 'reaction', clientId: myClientId, emoji })
       addFloating(emoji, profile.name, profile.color)
     },
     [addFloating, myClientId, profile.name, profile.color],
   )
 
-  handleMessageRef.current = (msg: RoomMessage) => {
+  handleMessageRef.current = (msg: Msg) => {
     if (msg.event === 'start') applyStart(msg.players, msg.matchId)
     else if (msg.event === 'turn') {
       if (msg.matchId === matchIdRef.current) game.applyRemoteTurn(msg.resolution, msg.seq)
       else if (msg.matchId > matchIdRef.current) requestSync()
-      // Turns from an older match are stale: drop them.
     } else if (msg.event === 'skip-turn') {
       if (msg.matchId === matchIdRef.current) game.applySkip(msg.seq)
       else if (msg.matchId > matchIdRef.current) requestSync()
@@ -294,9 +289,7 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
     }
   }
 
-  // Heartbeat: gossip our settled state so dropped messages are detected and
-  // repaired within seconds. Also fires when the tab becomes visible again —
-  // background tabs are exactly where broadcasts get lost.
+  // Heartbeat: gossip our settled state so dropped messages self-repair.
   const pingRef = useRef<() => void>(() => {})
   const ping = () => {
     if (room.status !== 'connected' || !startedRef.current) return
@@ -310,13 +303,14 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
       matchId: matchIdRef.current,
       seq,
       currentPlayerIndex: game.currentPlayerIndex,
-      positions: game.players.map((p) => p.position),
+      positions: game.players.map((p, i) => ({
+        tokens: [...p.tokens],
+        consecutiveSixes: i === game.currentPlayerIndex ? game.consecutiveSixes : 0,
+      })),
       winnerId: game.winnerId,
     })
   }
 
-  // Keep the async entry points (interval ticks, net hook callbacks) pointed
-  // at this render's closures.
   useEffect(() => {
     requestSyncRef.current = requestSync
     pingRef.current = ping
@@ -335,19 +329,12 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
     }
   }, [])
 
-  // The joiner's own status (pending / full / name-or-color clash) is derived
-  // from presence: a late joiner reliably sees the seated players' `inGame`
-  // flag, so computeRoster tells them whether they fit, collide, or must wait.
   const { seats, pending, rejected } = useMemo(() => computeRoster(room.members), [room.members])
   const myReason: RejectReason | null = rejected.get(myClientId) ?? null
   const amPending = pending.some((p) => p.clientId === myClientId)
 
-  // Who is acting host right now? Only the host admits late joiners and makes
-  // the continue/end call, so if they leave mid-match the room would stall.
-  // Instead every client deterministically promotes the next player: the
-  // lowest-seated one still connected. The original host is seat 0, so they
-  // keep it whenever present; otherwise it hands down the lineup. With no
-  // server, all clients fold the same lineup + presence and agree on who it is.
+  // Acting host: the lowest-seated player still connected (host keeps seat 0 while
+  // present), so the room never stalls if the host leaves mid-match.
   const actingHostClientId = useMemo(() => {
     if (!startedPlayers) return null
     const here = new Set(room.members.map((m) => m.clientId))
@@ -356,12 +343,6 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
   }, [startedPlayers, room.members, myClientId])
   const amActingHost = actingHostClientId === myClientId
 
-  // Host: which late joiners to prompt about. We derive this from the host's own
-  // authoritative game state (game.players / startedPlayers) rather than the
-  // aggregated `inGame` presence flag — a client doesn't reliably read its own
-  // `inGame` back, so presence alone would hide the running match from the host.
-  // A request is anyone connected who isn't seated, isn't declined, and doesn't
-  // clash with a seated name/color; we surface only as many as there are seats.
   const joinRequests = useMemo<RoomMember[]>(() => {
     if (!amActingHost || game.phase === 'setup') return []
     const openSeats = MAX_PLAYERS - game.players.length
@@ -393,7 +374,6 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
     room.send({ event: 'start', players, matchId })
   }
 
-  // Play Again: replay the same lineup (idempotent — any player may trigger it).
   const restartMatch = () => {
     const players = startedRef.current
     if (!players) return
@@ -402,8 +382,6 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
     room.send({ event: 'start', players, matchId })
   }
 
-  // Host: admit a late joiner into the live match. Only between turns (so the
-  // newcomer can't miss an in-flight roll) and only while a seat is open.
   const canAdmit = game.phase === 'idle' && game.players.length < MAX_PLAYERS
   const acceptJoiner = (member: RoomMember) => {
     const current = startedRef.current
@@ -419,7 +397,6 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
     room.send({ event: 'add-player', player: newPlayer, snapshot })
   }
 
-  // Host: turn a late joiner away (they return to the lobby).
   const rejectJoiner = (member: RoomMember) => {
     setDeclinedIds((prev) => new Set(prev).add(member.clientId))
     room.send({ event: 'reject-join', clientId: member.clientId })
@@ -435,19 +412,10 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
   const lineup = startedPlayers ?? []
   const everyonePresent = startedPlayers ? lineup.every((p) => present(p.clientId)) : false
 
-  // Seats still racing (finished players keep their seats but leave the
-  // rotation, and their presence no longer gates the match).
-  const activeSeatIdxs = lineup
-    .map((_, i) => i)
-    .filter((i) => !game.finishedOrder.includes(i))
+  const activeSeatIdxs = lineup.map((_, i) => i).filter((i) => !game.finishedOrder.includes(i))
   const presentActiveCount = activeSeatIdxs.filter((i) => present(lineup[i].clientId)).length
-  // With two connected active players the game can always go on — absent
-  // players' turns get skipped and they resync when they come back.
   const canPlay = presentActiveCount >= 2
 
-  // Skip the current player's turn when they have left the room. To avoid a
-  // thundering herd, only the first connected seat after theirs broadcasts the
-  // skip (duplicates are dropped by the sequence number anyway).
   const currentClientId = lineup[game.currentPlayerIndex]?.clientId
   const currentPlayerAbsent = currentClientId != null && !present(currentClientId)
   const skipResponderSeat = (() => {
@@ -467,7 +435,6 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
 
   const trySkipRef = useRef<() => void>(() => {})
   const trySkip = () => {
-    // Re-validate against fresh state when the grace timer fires.
     if (game.phase !== 'idle') return
     const cur = startedRef.current?.[game.currentPlayerIndex]
     if (!cur || present(cur.clientId)) return
@@ -476,7 +443,6 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
     room.send({ event: 'skip-turn', seq: seq + 1, matchId: matchIdRef.current })
     game.applySkip(seq + 1)
   }
-  // The grace timer must run this render's closure when it eventually fires.
   useEffect(() => {
     trySkipRef.current = trySkip
   })
@@ -485,13 +451,8 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
     if (!shouldInitiateSkip) return
     const timer = setTimeout(() => trySkipRef.current(), SKIP_GRACE_MS)
     return () => clearTimeout(timer)
-    // Re-arm per turn so chained skips (several absent players in a row) work.
   }, [shouldInitiateSkip, game.currentPlayerIndex, game.turnCount])
 
-  // Last racer standing: every other ACTIVE player has left (and stays gone
-  // for the grace period) — the remaining active player takes the last podium
-  // spot and the match ends. Every connected client applies this locally, so
-  // finished players who are still watching see the same ending.
   const soleActiveSeat =
     game.phase !== 'setup' &&
     game.phase !== 'won' &&
@@ -519,9 +480,6 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
     setTimeout(() => setNotices((prev) => prev.filter((n) => n.id !== id)), NOTICE_MS)
   }, [])
 
-  // Announce seated players leaving/returning while the match is live. Only
-  // players present in the *previous* roster snapshot are compared, so a
-  // freshly admitted late joiner doesn't trigger a bogus "is back".
   const prevPresentRef = useRef<Map<string, boolean> | null>(null)
   useEffect(() => {
     if (!startedPlayers || game.phase === 'setup' || game.phase === 'won') {
@@ -543,7 +501,6 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
     }
   }, [rosterIds, startedPlayers, myClientId, game.phase, pushNotice])
 
-  // Surface each applied skip (local or remote) as a notice.
   const lastSkipNonceRef = useRef(0)
   useEffect(() => {
     const f = game.skipFlash
@@ -553,10 +510,8 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
     pushNotice(`⏭️ ${name} is away — turn skipped`)
   }, [game.skipFlash, game.players, pushNotice])
 
-  // Announce host hand-offs: when the host leaves a 3+ player match, the next
-  // player takes over and everyone is told who it is. Skipped when only one
-  // active player is left — that is a forfeit win, not a hand-off (the lone
-  // survivor wins rather than "becoming the host").
+  // Host hand-off announcement (skipped when only one active player is left —
+  // that is a forfeit win, not a hand-off).
   const prevActingHostRef = useRef<string | null>(null)
   useEffect(() => {
     const prev = prevActingHostRef.current
@@ -598,7 +553,7 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
 
   return (
     <>
-      <GameScreen
+      <LudoGameScreen
         game={game}
         online={{
           roomCode: code,
@@ -625,11 +580,9 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
             key={`celebrate-${game.finishedOrder.length}`}
             player={lastFinisher}
             rank={game.finishedOrder.length - 1}
-            // Only the acting host decides whether to play on. If the original
-            // host left, the next player inherits the call (and duplicate
-            // decisions dedupe by sequence number anyway).
             canDecide={amActingHost}
             waitingFor={actingHostName}
+            message="brought all four tokens home! 🎉"
             onContinue={() => game.decide('continue')}
             onEnd={() => game.decide('end')}
           />
@@ -641,7 +594,6 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
             subtitle={
               game.winReason === 'forfeit' ? 'All other players left the game.' : undefined
             }
-            // No opponents left to play again with after a forfeit win.
             onPlayAgain={game.winReason === 'forfeit' ? undefined : restartMatch}
             onSecondary={onLeave}
             secondaryLabel="Leave"

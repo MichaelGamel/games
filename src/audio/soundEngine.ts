@@ -122,6 +122,29 @@ export class SoundEngine {
     this.blip(1318.51, 0.05, 0.1, 'sine', 0.12)
   }
 
+  /** Springy "pop" as a Ludo token launches out of its base on a six. */
+  playRelease(): void {
+    if (this.muted || !this.ensure()) return
+    this.blip(330, 0, 0.08, 'triangle', 0.2)
+    this.blip(660, 0.06, 0.12, 'triangle', 0.24)
+  }
+
+  /** Punchy thwack, then a descending tumble as the captured token is sent home. */
+  playCapture(): void {
+    if (this.muted || !this.ensure()) return
+    this.blip(180, 0, 0.09, 'square', 0.28) // impact
+    this.blip(520, 0.05, 0.12, 'sawtooth', 0.2) // victim…
+    this.blip(300, 0.16, 0.16, 'sawtooth', 0.16) // …tumbling back to base
+  }
+
+  /** Bright sparkle chime when a Ludo token completes its journey home. */
+  playHomeArrival(): void {
+    if (this.muted || !this.ensure()) return
+    const notes = [659.25, 987.77, 1318.51] // E5 B5 E6
+    notes.forEach((f, i) => this.blip(f, i * 0.08, 0.22, 'triangle', 0.26))
+    this.blip(2093, 0.26, 0.12, 'sine', 0.14) // C7 sparkle on top
+  }
+
   /** Victory fanfare. */
   playWin(): void {
     if (this.muted || !this.ensure()) return
