@@ -1,0 +1,53 @@
+{
+  "title": "Snakes & Ladders",
+  "tagline": "Climb the ladders, dodge the snakes, race to 100.",
+  "setupSubtitle": "2–4 players. One board. Roll your way to 100.",
+  "menu": {
+    "localSubtitle": "Two players, one screen. Take turns on the same device.",
+    "onlineSubtitle": "Create or join a room and play with a friend on another computer."
+  },
+  "rules": {
+    "board": "Board",
+    "classic": "Classic",
+    "surprise": "🎲 Surprise",
+    "size": "Size",
+    "sizeHint": "Surprise boards only",
+    "size10": "10×10",
+    "size8": "8×8 quick",
+    "dice": "Dice",
+    "oneDie": "1 die",
+    "twoDice": "2 dice",
+    "specialCells": "Special cells",
+    "specialsHint": "🛡️ shield · 🔀 swap · ✨ teleport",
+    "off": "Off",
+    "on": "On"
+  },
+  "banner": {
+    "luckySix": "LUCKY 6!",
+    "doubles": "DOUBLES!",
+    "rollAgainMe": "— roll again! 🎉",
+    "rollAgainOther": "rolls again! 🎉",
+    "shield": "🛡️ SHIELD!",
+    "shieldLine": "is protected from the next snake",
+    "shieldUsed": "🛡️ BLOCKED!",
+    "shieldUsedLine": "shrugged off a snake — shield's gone",
+    "swap": "🔀 SWAP!",
+    "swapLine": "traded places with the leader",
+    "teleport": "✨ TELEPORT!",
+    "teleportLine": "got whisked away somewhere new"
+  },
+  "status": {
+    "rolling": "{{name}} is rolling the dice…",
+    "rolled": "{{name}} rolled {{dice}}.",
+    "climbing": "Climbing a ladder!",
+    "downSnake": "Down a snake!",
+    "teleported": "✨ Teleported!",
+    "turnRoll": "{{name}}'s turn — roll the dice.",
+    "takesPlace": "{{name}} takes {{place}} place!",
+    "podiumSet": "Game over — the podium is set!",
+    "winsGame": "{{name}} wins the game!"
+  },
+  "metaTitle": "Snakes & Ladders — Robin's Games",
+  "metaDescription": "Roll the dice, climb the ladders, dodge the snakes — race your friends to 100. A polished, animated Snakes & Ladders for 2–4 players: pass-and-play on one screen or online in real time.",
+  "celebrationMessage": "made it to 100! 🎉"
+}

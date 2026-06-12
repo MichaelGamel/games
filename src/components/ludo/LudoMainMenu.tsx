@@ -1,6 +1,8 @@
 import { m } from 'motion/react'
+import { useTranslation } from 'react-i18next'
 import { cn } from '../../lib/cn'
 import { BackToHubLink } from '../BackToHubLink'
+import { LanguageSwitcher } from '../LanguageSwitcher'
 import { LudoBoardIcon } from './LudoBoardIcon'
 
 interface LudoMainMenuProps {
@@ -21,6 +23,7 @@ const item = {
 
 /** Ludo's mode picker, mirroring the Snakes `MainMenu`. */
 export function LudoMainMenu({ onLocal, onOnline, onlineEnabled }: LudoMainMenuProps) {
+  const { t } = useTranslation(['ludo', 'common'])
   return (
     <m.div
       key="ludo-menu"
@@ -31,6 +34,7 @@ export function LudoMainMenu({ onLocal, onOnline, onlineEnabled }: LudoMainMenuP
       className="relative z-10 flex min-h-screen flex-col items-center justify-center gap-10 px-4 py-10"
     >
       <BackToHubLink />
+      <LanguageSwitcher className="absolute end-4 top-4 z-20" />
 
       <m.header variants={item} className="text-center">
         <m.h1
@@ -39,26 +43,22 @@ export function LudoMainMenu({ onLocal, onOnline, onlineEnabled }: LudoMainMenuP
           transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
         >
           <LudoBoardIcon className="h-10 w-10 drop-shadow sm:h-14 sm:w-14" />
-          Ludo
+          {t('ludo:title')}
         </m.h1>
-        <p className="mt-3 text-white/70">Get all four tokens home — capture, block, roll a six.</p>
+        <p className="mt-3 text-white/70">{t('ludo:tagline')}</p>
       </m.header>
 
       <m.div variants={item} className="grid w-full max-w-2xl gap-4 sm:grid-cols-2">
         <MenuCard
           emoji="🎲"
-          title="Pass & Play"
-          subtitle="Two to four players on one screen. Add computer players too."
+          title={t('common:menu.passAndPlay')}
+          subtitle={t('ludo:menu.localSubtitle')}
           onClick={onLocal}
         />
         <MenuCard
           emoji="🌐"
-          title="Play Online"
-          subtitle={
-            onlineEnabled
-              ? 'Create or join a room and play with friends on other devices.'
-              : 'Online Ludo is coming soon — pass & play for now.'
-          }
+          title={t('common:menu.playOnline')}
+          subtitle={onlineEnabled ? t('ludo:menu.onlineSubtitle') : t('common:menu.onlineDisabled')}
           onClick={onOnline}
           disabled={!onlineEnabled}
         />

@@ -1,0 +1,83 @@
+{
+  "lobby": {
+    "title": "العب عبر الإنترنت",
+    "subtitle": "أنشئ غرفة وشارك الرمز، أو انضم إلى غرفة صديق.",
+    "createTab": "إنشاء غرفة",
+    "joinTab": "الانضمام لغرفة",
+    "yourName": "اسمك",
+    "namePlaceholder": "لاعب",
+    "tokenColor": "لون الحجر",
+    "roomCode": "رمز الغرفة",
+    "createRoom": "أنشئ غرفة ▶",
+    "joinRoom": "انضم للغرفة ▶"
+  },
+  "waiting": {
+    "shareCode": "شارك هذا الرمز",
+    "shareHint": "يدخله أصدقاؤك في شاشة «الانضمام لغرفة».",
+    "codeAria": "رمز الغرفة {{code}}، انقر للنسخ",
+    "copyInvite": "انسخ رابط الدعوة",
+    "linkCopied": "تم نسخ الرابط!",
+    "joinedRoom": "انضممت للغرفة",
+    "waitingForPlayers": "في انتظار اللاعبين… (نحتاج {{min}}+)",
+    "waitingForHost": "في انتظار المضيف ليبدأ…",
+    "playersCount": "اللاعبون {{count}}/{{max}}",
+    "playersAria": "اللاعبون في الغرفة",
+    "host": "مضيف",
+    "testModeHint": "وضع التجربة: يعمل بين تبويبات هذا المتصفح فقط. أضِف مفاتيح Supabase للعب الحقيقي بين الأجهزة.",
+    "connectErrorTitle": "تعذّر الاتصال",
+    "connectErrorBody": "اللعب عبر الإنترنت غير مُعدّ. أضِف مفاتيح Supabase وأعد النشر، أو شغّل محليًا في وضع التجربة.",
+    "leave": "خروج"
+  },
+  "reject": {
+    "fullTitle": "الغرفة ممتلئة",
+    "fullDetail": "وصلت هذه الغرفة إلى حدّ اللاعبين الأقصى. اطلب رمز غرفة آخر.",
+    "nameTakenTitle": "هذا الاسم مستخدم",
+    "nameTakenDetail": "أحد اللاعبين في الغرفة يستخدم هذا الاسم بالفعل. ارجع واختر اسمًا آخر.",
+    "colorTakenTitle": "هذا اللون مستخدم",
+    "colorTakenDetail": "أحد اللاعبين في الغرفة اختار هذا اللون بالفعل. ارجع واختر لونًا مختلفًا.",
+    "backToChange": "→ ارجع للتعديل",
+    "watchInstead": "👀 شاهد بدلًا من ذلك",
+    "declinedTitle": "ليس هذه المرة",
+    "declinedBody": "رفض المضيف طلب انضمامك. يمكنك تجربة غرفة أخرى.",
+    "backToLobby": "→ ارجع للردهة"
+  },
+  "pending": {
+    "title": "نسأل المضيف…",
+    "body": "هذه المباراة جارية بالفعل. طلبنا من المضيف إدخالك — انتظر قليلًا."
+  },
+  "spectate": {
+    "title": "جارٍ الانضمام للمشاهدة…",
+    "body": "نجلب المباراة الحية من اللاعبين — ستشاهد بعد لحظات.",
+    "watching": "👀 مشاهدة"
+  },
+  "joinRequests": {
+    "wantsToJoin": "يريد الانضمام",
+    "accept": "قبول",
+    "reject": "رفض",
+    "betweenTurns": "يمكنك إدخال اللاعبين بين الأدوار."
+  },
+  "badge": {
+    "connected": "متصل",
+    "playerAway": "لاعب غائب",
+    "testMode": "وضع التجربة",
+    "timerAria": "بقي {{count}} ثانية في هذا الدور"
+  },
+  "notices": {
+    "left": "🚪 {{name}} غادر اللعبة",
+    "back": "👋 {{name}} عاد",
+    "skipped": "⏭️ {{name}} غائب — تم تخطي دوره",
+    "newHost": "👑 {{name}} أصبح المضيف"
+  },
+  "status": {
+    "waitingReconnect": "في انتظار عودة اتصال أحد اللاعبين…",
+    "yourTurnRoll": "دورك — ارمِ النرد.",
+    "waitingForRoll": "في انتظار {{name}} ليرمي النرد…"
+  },
+  "reactions": {
+    "open": "تفاعلات",
+    "react": "تفاعل {{emoji}}",
+    "someone": "أحدهم"
+  },
+  "subtitleForfeit": "غادر جميع اللاعبين الآخرين اللعبة.",
+  "subtitleForfeitDuo": "غادر اللاعب الآخر اللعبة."
+}

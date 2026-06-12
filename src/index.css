@@ -1,10 +1,16 @@
 @import "tailwindcss";
 
+/* Fonts (Fredoka + Tajawal for Arabic) are loaded via <link> in index.html — a
+   remote CSS @import here gets dropped by the Tailwind v4 build, so the font
+   never loads. Per-codepoint matching makes Arabic glyphs fall through to
+   Tajawal while Latin text keeps Fredoka. */
+
 /* ------------------------------------------------------------------ */
 /*  Design tokens (Tailwind v4 @theme → generates utilities)          */
 /* ------------------------------------------------------------------ */
 @theme {
-  --font-display: "Fredoka", system-ui, "Segoe UI", Roboto, sans-serif;
+  /* Latin font first, Arabic fallback next — never swapped on language change. */
+  --font-display: "Fredoka", "Tajawal", system-ui, "Segoe UI", Roboto, sans-serif;
 
   /* Board surface */
   --color-board-light: #fdf3d8;

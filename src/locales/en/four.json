@@ -1,0 +1,21 @@
+{
+  "title": "Connect Four",
+  "tagline": "Drop, block, and connect four in a row.",
+  "hubTagline": "Drop, block, and connect four in a row — head to head.",
+  "setupSubtitle": "Head to head. First to four in a row wins.",
+  "menu": {
+    "localSubtitle": "Two players, one screen — or take on the computer.",
+    "onlineSubtitle": "Create or join a room and play a friend on another computer."
+  },
+  "dropAria": "Drop in column {{n}}",
+  "status": {
+    "drops": "{{name}} drops a disc…",
+    "yourTurn": "Your turn — pick a column.",
+    "waitingFor": "Waiting for {{name}}…",
+    "turnPick": "{{name}}'s turn — pick a column.",
+    "draw": "It's a draw — the board is full!",
+    "wins": "{{name}} connects four and wins!"
+  },
+  "metaTitle": "Connect Four — Robin's Games",
+  "metaDescription": "Connect Four on Robin's Games — drop discs, block your rival, and connect four in a row. Play head-to-head on one screen or online in real time."
+}

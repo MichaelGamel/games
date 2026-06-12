@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { m } from 'motion/react'
+import { useTranslation } from 'react-i18next'
 import { TOKEN_COLORS, type ColorOption } from '../../game/config'
 import type { PlayerProfile, Role } from '../../net/types'
+import { loadLocal, saveLocal } from '../../lib/storage'
 import { cn } from '../../lib/cn'
 
 export interface RoomParams {
@@ -22,6 +24,8 @@ interface OnlineLobbyProps {
   onBack: () => void
   onStart: (params: RoomParams, draft: LobbyDraft) => void
   initial?: LobbyDraft
+  /** Pre-filled room code from a shared invite link (`?room=CODE`). */
+  initialCode?: string
   /** Token palette to choose from; defaults to the Snakes set. Ludo passes its own. */
   colors?: readonly ColorOption[]
 }
@@ -30,19 +34,40 @@ const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // no ambiguous chars
 const genCode = () =>
   Array.from({ length: 4 }, () => CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)]).join('')
 
-export function OnlineLobby({ onBack, onStart, initial, colors }: OnlineLobbyProps) {
+/** "Remember me": last-used name + color, shared by every game's lobby. */
+const PROFILE_KEY = 'rg-profile-v1'
+interface StoredProfile {
+  name: string
+  color: string
+}
+
+export function OnlineLobby({ onBack, onStart, initial, initialCode, colors }: OnlineLobbyProps) {
+  const { t } = useTranslation(['online', 'common'])
   const palette = colors ?? TOKEN_COLORS
-  const [tab, setTab] = useState<'create' | 'join'>(initial?.tab ?? 'create')
-  const [name, setName] = useState(initial?.name ?? '')
-  const [color, setColor] = useState(initial?.color ?? palette[0].value)
-  const [code, setCode] = useState(initial?.code ?? '')
+  const [tab, setTab] = useState<'create' | 'join'>(
+    initial?.tab ?? (initialCode ? 'join' : 'create'),
+  )
+  // Prefill from the remembered profile unless a bounce-back already carries
+  // fresher values. Loaded once in the initializers (storage never changes
+  // while the lobby is open).
+  const [remembered] = useState<StoredProfile | null>(() =>
+    initial ? null : loadLocal<StoredProfile | null>(PROFILE_KEY, null),
+  )
+  const [name, setName] = useState(initial?.name ?? remembered?.name ?? '')
+  const [color, setColor] = useState(() => {
+    if (initial?.color) return initial.color
+    if (remembered && palette.some((c) => c.value === remembered.color)) return remembered.color
+    return palette[0].value
+  })
+  const [code, setCode] = useState(initial?.code ?? initialCode ?? '')
 
   const joinDisabled = tab === 'join' && code.trim().length < 4
 
   const handleSubmit = () => {
-    const cleanName = name.trim() || 'Player'
+    const cleanName = name.trim() || t('online:lobby.namePlaceholder')
     const profile: PlayerProfile = { name: cleanName, color }
     const draft: LobbyDraft = { tab, name: cleanName, color, code }
+    saveLocal<StoredProfile>(PROFILE_KEY, { name: cleanName, color })
     if (tab === 'create') {
       onStart({ code: genCode(), role: 'host', profile }, draft)
     } else {
@@ -63,36 +88,36 @@ export function OnlineLobby({ onBack, onStart, initial, colors }: OnlineLobbyPro
         onClick={onBack}
         className="absolute left-4 top-4 rounded-lg px-3 py-1.5 text-sm text-white/70 ring-1 ring-white/15 transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
       >
-        ← Menu
+        ← {t('common:menu.back')}
       </button>
 
       <header className="text-center">
         <h1 className="text-3xl font-bold tracking-tight text-white drop-shadow sm:text-4xl">
-          Play Online
+          {t('online:lobby.title')}
         </h1>
-        <p className="mt-2 text-white/70">Create a room and share the code, or join a friend's.</p>
+        <p className="mt-2 text-white/70">{t('online:lobby.subtitle')}</p>
       </header>
 
       <div className="w-full max-w-sm rounded-2xl bg-white/5 p-6 ring-1 ring-white/10 backdrop-blur">
         {/* Create / Join toggle */}
         <div className="mb-5 grid grid-cols-2 gap-1 rounded-xl bg-night-900/50 p-1">
-          {(['create', 'join'] as const).map((t) => (
+          {(['create', 'join'] as const).map((tabId) => (
             <button
-              key={t}
+              key={tabId}
               type="button"
-              onClick={() => setTab(t)}
+              onClick={() => setTab(tabId)}
               className={cn(
-                'rounded-lg py-2 text-sm font-semibold capitalize transition',
-                tab === t ? 'bg-grape text-white shadow' : 'text-white/60 hover:text-white',
+                'rounded-lg py-2 text-sm font-semibold transition',
+                tab === tabId ? 'bg-grape text-white shadow' : 'text-white/60 hover:text-white',
               )}
             >
-              {t === 'create' ? 'Create room' : 'Join room'}
+              {tabId === 'create' ? t('online:lobby.createTab') : t('online:lobby.joinTab')}
             </button>
           ))}
         </div>
 
         <label htmlFor="online-name" className="mb-1.5 block text-xs uppercase tracking-wide text-white/50">
-          Your name
+          {t('online:lobby.yourName')}
         </label>
         <input
           id="online-name"
@@ -100,11 +125,13 @@ export function OnlineLobby({ onBack, onStart, initial, colors }: OnlineLobbyPro
           value={name}
           maxLength={14}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Player"
+          placeholder={t('online:lobby.namePlaceholder')}
           className="mb-4 w-full rounded-lg bg-night-900/60 px-3 py-2 text-white placeholder-white/40 outline-none ring-1 ring-white/15 focus:ring-2 focus:ring-white/50"
         />
 
-        <p className="mb-2 text-xs uppercase tracking-wide text-white/50">Token color</p>
+        <p className="mb-2 text-xs uppercase tracking-wide text-white/50">
+          {t('online:lobby.tokenColor')}
+        </p>
         <div className="mb-5 flex flex-wrap gap-2">
           {palette.map((c) => {
             const selected = color === c.value
@@ -128,7 +155,7 @@ export function OnlineLobby({ onBack, onStart, initial, colors }: OnlineLobbyPro
         {tab === 'join' && (
           <div className="mb-5">
             <label htmlFor="room-code" className="mb-1.5 block text-xs uppercase tracking-wide text-white/50">
-              Room code
+              {t('online:lobby.roomCode')}
             </label>
             <input
               id="room-code"
@@ -155,7 +182,7 @@ export function OnlineLobby({ onBack, onStart, initial, colors }: OnlineLobbyPro
             joinDisabled && 'cursor-not-allowed opacity-50',
           )}
         >
-          {tab === 'create' ? 'Create Room ▶' : 'Join Room ▶'}
+          {tab === 'create' ? t('online:lobby.createRoom') : t('online:lobby.joinRoom')}
         </m.button>
       </div>
     </m.div>

@@ -9,6 +9,7 @@
  */
 import { useState } from 'react'
 import { AnimatePresence, m, useReducedMotion } from 'motion/react'
+import { useTranslation } from 'react-i18next'
 import type { FloatingReaction } from '../../net/useOnlineMatch'
 
 export type { FloatingReaction }
@@ -18,10 +19,11 @@ const REACTION_EMOJIS = ['👍', '😂', '😮', '😢', '🎉', '🔥'] as cons
 
 /** Corner picker: a button that pops a column of emoji upward. */
 export function ReactionBar({ onReact }: { onReact: (emoji: string) => void }) {
+  const { t } = useTranslation('online')
   const [open, setOpen] = useState(false)
 
   return (
-    <div className="pointer-events-auto fixed bottom-24 right-3 z-30 flex flex-col items-end gap-2 lg:bottom-8 lg:right-8">
+    <div className="pointer-events-auto fixed bottom-24 end-3 z-30 flex flex-col items-end gap-2 lg:bottom-8 lg:end-8">
       <AnimatePresence>
         {open && (
           <m.div
@@ -39,7 +41,7 @@ export function ReactionBar({ onReact }: { onReact: (emoji: string) => void }) {
                   onReact(emoji)
                   setOpen(false)
                 }}
-                aria-label={`React ${emoji}`}
+                aria-label={t('reactions.react', { emoji })}
                 className="grid h-10 w-10 place-items-center rounded-xl text-2xl transition hover:scale-110 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
               >
                 {emoji}
@@ -52,7 +54,7 @@ export function ReactionBar({ onReact }: { onReact: (emoji: string) => void }) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        aria-label="Reactions"
+        aria-label={t('reactions.open')}
         aria-expanded={open}
         className="grid h-12 w-12 place-items-center rounded-full bg-night-800/90 text-2xl shadow-lg ring-1 ring-white/15 backdrop-blur transition hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
       >

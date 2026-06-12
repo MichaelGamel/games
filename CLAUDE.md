@@ -32,12 +32,19 @@ intact rather than reaching across them.
 ### Layers (inner → outer)
 
 - **`src/game/`** — pure, framework-free, deterministic. Decides *what happens*, never touches the
-  DOM, timers, or randomness.
-  - `config.ts` is the single source of truth for tunables: the snake/ladder map, palette, board
-    size, and all animation durations (`TIMING`). Change game feel here, not in components.
-  - `rules.ts` — `rollDie(rng?)` (injectable RNG, so tests are deterministic) and `resolveTurn()`,
-    which returns a `TurnResolution`: the *complete* outcome of one roll (walk path, bounce, jump,
-    final position, win, extra-turn).
+  DOM, timers, or randomness. (`src/ludo/` and `src/four/` mirror this layout for Ludo and
+  Connect Four.)
+  - `config.ts` is the single source of truth for tunables: the classic board layout, palette,
+    default rules, and all animation durations (`TIMING`). Change game feel here, not in components.
+  - **Rule variants** are per-match values: `SnakesRules` (classic/seeded-random board, 10×10 or
+    8×8, one or two dice, special cells) / `LudoRules` (two dice, head start, blockades, capture
+    gate, 2v2 teams). They are chosen at setup (host chooses online), validated by `asXxxRules()`
+    on receipt, and broadcast inside `start` + snapshots so every client plays the same game.
+    `boardGen.ts` turns a seed into a valid board deterministically (mulberry32) — the host sends
+    just the seed.
+  - `rules.ts` — `rollDice(count, rng?)` (injectable RNG, so tests are deterministic) and
+    `resolveTurn(ctx)`, which returns a `TurnResolution`: the *complete* outcome of one roll
+    (walk path, bounce, jump, shield/swap/teleport specials, final position, win, extra-turn).
   - `gameReducer.ts` — pure phase machine (`setup → idle → rolling → moving → celebrating → won`).
     It only *applies* an already-resolved `TurnResolution`; it computes no rules and runs no async.
     `celebrating` is the pause after a mid-game finish (3–4 players): the finisher joins
@@ -104,9 +111,11 @@ The app is **"Robin's Games," a multi-game hub.** `src/main.tsx` is the bootstra
   by adding one array entry).
 - `/snakes` → `App` — the Snakes & Ladders 3-mode switch, **unchanged internally** (it only moved
   off `/`).
-- `/ludo` → `LudoApp` — **lazy-loaded** (`React.lazy` + `Suspense`) so its chunk never loads on `/`
-  or `/snakes`. Placeholder today; the real game replaces it in a later phase.
+- `/ludo` → `LudoApp`, `/four` → `FourApp` (Connect Four) — both **lazy-loaded** (`React.lazy` +
+  `Suspense`) so their chunks never load on `/` or `/snakes`.
 - `*` → redirect to `/`.
+- Every game's App consumes `?room=CODE` once on mount (the invite deep link copied from the
+  waiting room) and opens the online lobby with the code pre-filled on the Join tab.
 
 Per-route SEO is a dependency-free hook, `src/lib/useDocumentMeta.ts`: each route component calls it
 with its own title/description, and it sets `document.title`, the meta description, the
@@ -120,6 +129,26 @@ A new kind of move generally touches three files in order: extend `TurnResolutio
 (`hooks/useSnakesAndLadders.ts`) → render it (`components/`). If the new state must survive a remote
 turn, it must be carried inside `TurnResolution`, since that payload is the entire over-the-wire
 contract.
+
+### Cross-cutting features
+
+- **Match log → recap + replay.** Each game hook records every committed event into `matchLog`
+  (`lib/matchLog.ts`). Pure summarizers (`game/recap.ts`, `ludo/recap.ts`) feed the stats panel in
+  the winner overlay; `SnakesReplay`/`LudoReplay` re-feed the log through a fresh controller's
+  remote-event pipeline, so a replay animates exactly like the original match. A client that joined
+  mid-match has `matchLog === null` (no recap/replay).
+- **Local stats.** `lib/stats.ts` keeps per-name win/streak counts in localStorage (recorded once
+  per finished match by `useRecordMatch`; bots excluded); the hub renders the Hall of Fame from it.
+  `lib/storage.ts` is the only localStorage access path.
+- **Undo (Ludo, pass-and-play only).** `useLudo` snapshots the pre-roll state per local turn and
+  `RESTORE`s the most recent human-turn entry; the sequencer is rebased and the match log trimmed
+  to match. Never recorded online.
+- **i18n.** `i18next` + `react-i18next`, bundled JSON under `src/locales/{en,ar}/` with one
+  namespace per game plus `common` and `online`. `src/i18n.ts` keeps `<html lang/dir>` in sync
+  (Arabic ⇒ RTL); the switcher lives on the hub and each game menu. `locales/parity.test.ts` fails
+  CI when EN/AR keys drift apart. Net-layer strings (notices) use the `i18n` singleton. Prefer
+  Tailwind logical utilities (`ms-*`, `me-*`, `start-*`, `end-*`) in chrome; board geometry is
+  deliberately direction-neutral.
 
 ## Environment & online play
 

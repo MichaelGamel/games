@@ -12,6 +12,10 @@ interface TokenProps {
   /** Center position as board percentages (0–100). */
   x: number
   y: number
+  /** Pawn diameter as a board percentage (scales with the board size). */
+  sizePct: number
+  /** Player holds a shield (specials rule) — shown as a small badge. */
+  hasShield: boolean
   /** How the token is currently moving (drives the transition + flourish). */
   kind: MoveKind
   /** This token is the one currently animating. */
@@ -35,6 +39,8 @@ export const Token = memo(function Token({
   color,
   x,
   y,
+  sizePct,
+  hasShield,
   kind,
   isMoving,
   isCurrent,
@@ -48,7 +54,9 @@ export const Token = memo(function Token({
       ? { duration: (TIMING.jumpMs / 1000) * scale, ease: [0.4, 0, 0.2, 1] }
       : kind === 'snake'
         ? { duration: (TIMING.jumpMs / 1000) * scale, ease: [0.45, 0, 0.55, 1] }
-        : { type: 'spring', stiffness: 700, damping: 30, mass: 0.7 }
+        : kind === 'teleport'
+          ? { duration: (TIMING.specialMs / 1000) * scale, ease: [0.34, 1.3, 0.64, 1] }
+          : { type: 'spring', stiffness: 700, damping: 30, mass: 0.7 }
 
   // Inner flourish per move kind.
   const flourish =
@@ -57,13 +65,15 @@ export const Token = memo(function Token({
         ? { scale: [1, 1.18, 1.05], y: ['0%', '-12%', '0%'] }
         : kind === 'snake'
           ? { rotate: [0, -14, 12, -8, 0], scaleY: [1, 0.82, 1.05, 1] }
-          : { scale: 1.16 }
+          : kind === 'teleport'
+            ? { scale: [1, 0.4, 1.3, 1], rotate: [0, 180, 360] }
+            : { scale: 1.16 }
       : { scale: 1, rotate: 0, scaleY: 1, y: '0%' }
 
   return (
     <m.div
       className="absolute"
-      style={{ x: '-50%', y: '-50%', width: '8.6%', height: '8.6%', zIndex: z }}
+      style={{ x: '-50%', y: '-50%', width: `${sizePct}%`, height: `${sizePct}%`, zIndex: z }}
       initial={false}
       animate={{ left: `${x}%`, top: `${y}%` }}
       transition={positionTransition}
@@ -93,6 +103,15 @@ export const Token = memo(function Token({
           <span className="text-[1.7vmin] font-bold text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.6)] sm:text-[0.8rem]">
             {name.charAt(0).toUpperCase()}
           </span>
+          {hasShield && (
+            <span
+              className="absolute -right-1 -top-1 text-[1.6vmin] drop-shadow sm:text-xs"
+              title="Shield: blocks the next snake"
+              aria-label="holding a shield"
+            >
+              🛡️
+            </span>
+          )}
         </div>
       </m.div>
     </m.div>

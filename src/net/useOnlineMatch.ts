@@ -30,6 +30,7 @@
  * maps the game's board state to/from the generic `S` payload.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import i18n from '../i18n'
 import { useRoom } from './useRoom'
 import { MAX_PLAYERS, MIN_PLAYERS, computeRoster, orderMembers, type RejectReason } from './roster'
 import type {
@@ -41,7 +42,7 @@ import type {
   RunningSnapshot,
   StartPlayer,
 } from './types'
-import type { DieValue, MatchDecision } from '../game/types'
+import type { MatchDecision } from '../game/types'
 import { soundEngine } from '../audio/soundEngine'
 
 /** How often each settled client gossips its game state (see `sync-ping`). */
@@ -59,6 +60,12 @@ const NOTICE_MS = 4000
 const REACTION_MS = 2600
 /** Minimum spacing between our own reaction sends (anti-spam). */
 const REACTION_THROTTLE_MS = 350
+/** How long the current player may sit on an idle turn before it is skipped.
+ *  Their own client broadcasts the skip (an absent player's turn is handled
+ *  by the presence grace instead). */
+const TURN_TIMER_MS = 30_000
+/** How often a watching spectator re-asks for the match state until adopted. */
+const SPECTATE_RETRY_MS = 2000
 
 /** A transient join/leave/skip announcement. */
 export interface Notice {
@@ -89,12 +96,12 @@ export interface OnlineMatchGame<R> {
   turnCount: number
   winnerId: number | null
   finishedOrder: readonly number[]
-  lastRoll: DieValue | null
+  lastRoll: number | null
   skipFlash: { playerId: number; nonce: number } | null
   applyRemoteTurn(resolution: R, seq: number): void
   applySkip(seq: number): void
   applyRemoteDecision(decision: MatchDecision, seq: number): void
-  applyRemoteStart(players: { name: string; color: string }[]): void
+  applyRemoteStart(players: { name: string; color: string }[], rules?: unknown): void
   applyRemoteReset(): void
   addPlayer(player: { name: string; color: string }): void
   forfeitWin(winnerId: number): void
@@ -121,6 +128,10 @@ export interface UseOnlineMatchArgs<R, S> {
   adapter: OnlineMatchAdapter<S>
   /** Reports this client's seat in the started lineup (null = spectator). */
   onSeat: (seat: number | null) => void
+  /** Host only: the rule variant to stamp on the next `start` broadcast. */
+  matchRules?: () => unknown
+  /** Seats this game supports (default 4; Connect Four passes 2). */
+  maxPlayers?: number
 }
 
 export interface OnlineMatch<R> {
@@ -152,6 +163,12 @@ export interface OnlineMatch<R> {
   notices: Notice[]
   reactions: FloatingReaction[]
   sendReaction: (emoji: string) => void
+  /** Seconds left on the current idle turn (online matches only), or null. */
+  turnSecondsLeft: number | null
+  /** True when this client is watching the match without a seat. */
+  amSpectator: boolean
+  /** Ask the room for the live state and watch the match without a seat. */
+  requestSpectate: () => void
   /** Wire these three into the game hook's net hooks. */
   sendTurn: (resolution: R, seq: number) => void
   sendDecision: (decision: MatchDecision, seq: number) => void
@@ -166,6 +183,8 @@ export function useOnlineMatch<R, S>({
   game,
   adapter,
   onSeat,
+  matchRules,
+  maxPlayers = MAX_PLAYERS,
 }: UseOnlineMatchArgs<R, S>): OnlineMatch<R> {
   const [startedPlayers, setStartedPlayers] = useState<StartPlayer[] | null>(null)
   const startedRef = useRef<StartPlayer[] | null>(null)
@@ -178,6 +197,12 @@ export function useOnlineMatch<R, S>({
   // missed `start` is detectable.
   const matchIdRef = useRef(0)
   const lastSyncRequestAtRef = useRef(0)
+  // The active match's rule variant (opaque here): echoed on snapshots and on
+  // Play Again so every client — and every late joiner — plays the same rules.
+  const rulesRef = useRef<unknown>(undefined)
+  // Watching without a seat (room was full, or just curious).
+  const [spectating, setSpectating] = useState(false)
+  const spectatingRef = useRef(false)
 
   // Latest-value refs for async paths (heartbeats, message handling, grace
   // timers), synced after each commit. Async callbacks only run after the
@@ -201,22 +226,31 @@ export function useOnlineMatch<R, S>({
   const { send, setInGame } = room
 
   const statusRef = useRef(room.status)
+  const matchRulesRef = useRef(matchRules)
   useEffect(() => {
     gameRef.current = game
     adapterRef.current = adapter
     onSeatRef.current = onSeat
     statusRef.current = room.status
+    matchRulesRef.current = matchRules
+    spectatingRef.current = spectating
   })
 
   // Lock in a started match: find our seat, remember the lineup, flag presence.
-  const applyStart = (players: StartPlayer[], matchId: number) => {
+  const applyStart = (players: StartPlayer[], matchId: number, rules: unknown) => {
     matchIdRef.current = matchId
     startedRef.current = players
     setStartedPlayers(players)
+    rulesRef.current = rules
     const mySeat = players.findIndex((p) => p.clientId === myClientId)
     onSeatRef.current(mySeat >= 0 ? mySeat : null)
-    setInGame(true)
-    gameRef.current.applyRemoteStart(players.map(({ name, color }) => ({ name, color })))
+    if (mySeat >= 0) {
+      setSpectating(false)
+      spectatingRef.current = false
+    }
+    // Spectators stay out of the seated roster.
+    if (!spectatingRef.current) setInGame(true)
+    gameRef.current.applyRemoteStart(players.map(({ name, color }) => ({ name, color })), rules)
   }
 
   // Replace our whole view of the match with an authoritative snapshot. Used by
@@ -226,9 +260,17 @@ export function useOnlineMatch<R, S>({
     matchIdRef.current = snapshot.matchId
     startedRef.current = snapshot.lineup
     setStartedPlayers(snapshot.lineup)
+    rulesRef.current = snapshot.rules
     const mySeat = snapshot.lineup.findIndex((p) => p.clientId === myClientId)
     onSeatRef.current(mySeat >= 0 ? mySeat : null)
-    setInGame(true)
+    if (mySeat >= 0) {
+      // A spectator the host admitted is now a player.
+      setSpectating(false)
+      spectatingRef.current = false
+    }
+    // Spectators stay out of the seated roster (their presence must not flip
+    // `inGame`, which is what locks rooms and orders seats).
+    if (!spectatingRef.current) setInGame(true)
     adapterRef.current.applySnapshot(snapshot)
   }
 
@@ -245,6 +287,7 @@ export function useOnlineMatch<R, S>({
       ended: g.phase === 'won',
       turnCount: g.turnCount,
       matchId: matchIdRef.current,
+      rules: rulesRef.current,
     }
   }
 
@@ -277,12 +320,14 @@ export function useOnlineMatch<R, S>({
     send({ event: 'sync-request', clientId: myClientId })
   }, [send, myClientId])
 
-  // Answer a lagging client with our settled state. Only seated players get
-  // answers — a pending late joiner must wait for the host's approval.
-  const sendStateTo = (toClientId: string) => {
+  // Answer a lagging client with our settled state. Only seated players (and
+  // explicit spectators) get answers — a pending late joiner must wait for the
+  // host's approval.
+  const sendStateTo = (toClientId: string, forSpectator = false) => {
     const g = gameRef.current
     const lineup = startedRef.current
-    if (!lineup?.some((p) => p.clientId === toClientId)) return
+    if (!lineup) return
+    if (!forSpectator && !lineup.some((p) => p.clientId === toClientId)) return
     if (!isSettled(g.phase)) return
     if (g.syncStatus().busy) return
     send({
@@ -379,7 +424,7 @@ export function useOnlineMatch<R, S>({
 
   const handleMessage = (msg: Msg) => {
     const g = gameRef.current
-    if (msg.event === 'start') applyStart(msg.players, msg.matchId)
+    if (msg.event === 'start') applyStart(msg.players, msg.matchId, msg.rules)
     else if (msg.event === 'turn') {
       if (msg.matchId === matchIdRef.current) g.applyRemoteTurn(msg.resolution, msg.seq)
       else if (msg.matchId > matchIdRef.current) requestSync()
@@ -394,11 +439,12 @@ export function useOnlineMatch<R, S>({
     else if (msg.event === 'add-player') applyAddPlayer(msg.player, msg.snapshot)
     else if (msg.event === 'reject-join' && msg.clientId === myClientId) setDeclined(true)
     else if (msg.event === 'sync-ping') handleSyncPing(msg)
-    else if (msg.event === 'sync-request' && msg.clientId !== myClientId) sendStateTo(msg.clientId)
+    else if (msg.event === 'sync-request' && msg.clientId !== myClientId)
+      sendStateTo(msg.clientId, msg.spectate === true)
     else if (msg.event === 'sync-state') handleSyncState(msg)
     else if (msg.event === 'reaction') {
       const sender = room.members.find((m) => m.clientId === msg.clientId)
-      addFloating(msg.emoji, sender?.name ?? 'Someone', sender?.color ?? '#a855f7')
+      addFloating(msg.emoji, sender?.name ?? i18n.t('online:reactions.someone'), sender?.color ?? '#a855f7')
     }
   }
 
@@ -422,6 +468,7 @@ export function useOnlineMatch<R, S>({
   const ping = useCallback(() => {
     const g = gameRef.current
     if (statusRef.current !== 'connected' || !startedRef.current) return
+    if (spectatingRef.current) return // watchers have no authoritative state
     if (!isSettled(g.phase)) return
     const { seq, busy } = g.syncStatus()
     if (busy) return
@@ -454,7 +501,10 @@ export function useOnlineMatch<R, S>({
   // The joiner's own status (pending / full / name-or-color clash) is derived
   // from presence: a late joiner reliably sees the seated players' `inGame`
   // flag, so computeRoster tells them whether they fit, collide, or must wait.
-  const { seats, pending, rejected } = useMemo(() => computeRoster(room.members), [room.members])
+  const { seats, pending, rejected } = useMemo(
+    () => computeRoster(room.members, maxPlayers),
+    [room.members, maxPlayers],
+  )
   const myRejection: RejectReason | null = rejected.get(myClientId) ?? null
   const amPending = pending.some((p) => p.clientId === myClientId)
 
@@ -484,7 +534,7 @@ export function useOnlineMatch<R, S>({
   // clash with a seated name/color; we surface only as many as there are seats.
   const joinRequests = useMemo<RoomMember[]>(() => {
     if (!amActingHost || game.phase === 'setup') return []
-    const openSeats = MAX_PLAYERS - game.players.length
+    const openSeats = maxPlayers - game.players.length
     if (openSeats <= 0) return []
     const lineupIds = new Set((startedPlayers ?? []).map((p) => p.clientId))
     const lineupNames = new Set(game.players.map((p) => p.name.trim().toLowerCase()))
@@ -499,7 +549,7 @@ export function useOnlineMatch<R, S>({
           !lineupColors.has(m.color),
       )
       .slice(0, openSeats)
-  }, [amActingHost, game.phase, game.players, startedPlayers, room.members, declinedIds, myClientId])
+  }, [amActingHost, game.phase, game.players, startedPlayers, room.members, declinedIds, myClientId, maxPlayers])
 
   // Host: broadcast the authoritative lineup, then everyone applies it.
   const startMatch = () => {
@@ -509,22 +559,25 @@ export function useOnlineMatch<R, S>({
       color: m.color,
     }))
     const matchId = matchIdRef.current + 1
-    applyStart(players, matchId)
-    send({ event: 'start', players, matchId })
+    const rules = matchRulesRef.current?.()
+    applyStart(players, matchId, rules)
+    send({ event: 'start', players, matchId, rules })
   }
 
-  // Play Again: replay the same lineup (idempotent — any player may trigger it).
+  // Play Again: replay the same lineup and rules (idempotent — any seated
+  // player may trigger it; spectators may not).
   const restartMatch = () => {
     const players = startedRef.current
-    if (!players) return
+    if (!players || spectatingRef.current) return
     const matchId = matchIdRef.current + 1
-    applyStart(players, matchId)
-    send({ event: 'start', players, matchId })
+    const rules = rulesRef.current
+    applyStart(players, matchId, rules)
+    send({ event: 'start', players, matchId, rules })
   }
 
   // Host: admit a late joiner into the live match. Only between turns (so the
   // newcomer can't miss an in-flight roll) and only while a seat is open.
-  const canAdmit = game.phase === 'idle' && game.players.length < MAX_PLAYERS
+  const canAdmit = game.phase === 'idle' && game.players.length < maxPlayers
   const acceptJoiner = (member: RoomMember) => {
     const current = startedRef.current
     if (!current || !canAdmit) return
@@ -633,6 +686,80 @@ export function useOnlineMatch<R, S>({
     return () => clearTimeout(timer)
   }, [soleActiveSeat])
 
+  // ---- Spectating ----------------------------------------------------------
+
+  const requestSpectate = useCallback(() => {
+    setSpectating(true)
+    spectatingRef.current = true
+    send({ event: 'sync-request', clientId: myClientId, spectate: true })
+  }, [send, myClientId])
+
+  // Keep asking until someone answers with the match state (seated clients
+  // only reply when settled, so the first request can easily go unanswered).
+  useEffect(() => {
+    if (!spectating || startedPlayers) return
+    const interval = setInterval(() => {
+      send({ event: 'sync-request', clientId: myClientId, spectate: true })
+    }, SPECTATE_RETRY_MS)
+    return () => clearInterval(interval)
+  }, [spectating, startedPlayers, send, myClientId])
+
+  // ---- Turn timer: don't let one player stall the room ---------------------
+
+  // The deadline for the current idle turn. Tracked with a ref (set after
+  // commit) + a ticking countdown state for display.
+  const turnDeadlineRef = useRef<number | null>(null)
+  const [turnSecondsLeft, setTurnSecondsLeft] = useState<number | null>(null)
+  const timedTurnActive =
+    startedPlayers != null && game.phase === 'idle' && canPlay && room.status === 'connected'
+
+  useEffect(() => {
+    if (!timedTurnActive) {
+      turnDeadlineRef.current = null
+      return
+    }
+    turnDeadlineRef.current = Date.now() + TURN_TIMER_MS
+    // Re-arms whenever the turn changes hands (or a skip/decision commits).
+  }, [timedTurnActive, game.currentPlayerIndex, game.turnCount])
+
+  // Tick the visible countdown (async callback, so setState there is fine).
+  // While no clock runs, the stale state is simply not shown (see the return).
+  useEffect(() => {
+    if (!timedTurnActive) return
+    const tick = () => {
+      const deadline = turnDeadlineRef.current
+      setTurnSecondsLeft(deadline == null ? null : Math.max(0, Math.ceil((deadline - Date.now()) / 1000)))
+    }
+    const interval = setInterval(tick, 250)
+    return () => clearInterval(interval)
+  }, [timedTurnActive])
+
+  // When it is OUR turn and the deadline passes, skip ourselves. (An absent
+  // player's turn is skipped by the presence grace; this handles a present
+  // but idle one.) Guards re-run on fire because everything is read fresh.
+  const skipSelfRef = useRef<() => void>(() => {})
+  const skipSelf = () => {
+    const g = gameRef.current
+    if (g.phase !== 'idle') return
+    const cur = startedRef.current?.[g.currentPlayerIndex]
+    if (!cur || cur.clientId !== myClientId) return
+    const { seq, busy } = g.syncStatus()
+    if (busy) return
+    send({ event: 'skip-turn', seq: seq + 1, matchId: matchIdRef.current })
+    g.applySkip(seq + 1)
+  }
+  useEffect(() => {
+    skipSelfRef.current = skipSelf
+  })
+
+  const myTurnTimed = timedTurnActive && mySeat >= 0 && game.currentPlayerIndex === mySeat
+  useEffect(() => {
+    if (!myTurnTimed) return
+    const timer = setTimeout(() => skipSelfRef.current(), TURN_TIMER_MS)
+    return () => clearTimeout(timer)
+    // Re-arm per turn, mirroring the deadline effect above.
+  }, [myTurnTimed, game.currentPlayerIndex, game.turnCount])
+
   // ---- Lightweight notices ("X left", "X is back", "turn skipped") --------
 
   const [notices, setNotices] = useState<Notice[]>([])
@@ -662,8 +789,8 @@ export function useOnlineMatch<R, S>({
       if (p.clientId === myClientId || !prev.has(p.clientId)) continue
       const was = prev.get(p.clientId)!
       const is = now.get(p.clientId)!
-      if (was && !is) pushNotice(`🚪 ${p.name} left the game`)
-      else if (!was && is) pushNotice(`👋 ${p.name} is back`)
+      if (was && !is) pushNotice(i18n.t('online:notices.left', { name: p.name }))
+      else if (!was && is) pushNotice(i18n.t('online:notices.back', { name: p.name }))
     }
   }, [rosterIds, startedPlayers, myClientId, game.phase, pushNotice])
 
@@ -673,8 +800,8 @@ export function useOnlineMatch<R, S>({
     const f = game.skipFlash
     if (!f || f.nonce === lastSkipNonceRef.current) return
     lastSkipNonceRef.current = f.nonce
-    const name = game.players[f.playerId]?.name ?? 'Player'
-    pushNotice(`⏭️ ${name} is away — turn skipped`)
+    const name = game.players[f.playerId]?.name ?? '?'
+    pushNotice(i18n.t('online:notices.skipped', { name }))
   }, [game.skipFlash, game.players, pushNotice])
 
   // Announce host hand-offs: when the host leaves a 3+ player match, the next
@@ -688,8 +815,8 @@ export function useOnlineMatch<R, S>({
     if (!startedPlayers || game.phase === 'setup' || game.phase === 'won') return
     if (prev == null || actingHostClientId == null || prev === actingHostClientId) return
     if (presentActiveCount < 2) return
-    const name = startedPlayers.find((p) => p.clientId === actingHostClientId)?.name ?? 'A player'
-    pushNotice(`👑 ${name} is now the host`)
+    const name = startedPlayers.find((p) => p.clientId === actingHostClientId)?.name ?? '?'
+    pushNotice(i18n.t('online:notices.newHost', { name }))
   }, [actingHostClientId, startedPlayers, game.phase, presentActiveCount, pushNotice])
 
   return {
@@ -714,6 +841,9 @@ export function useOnlineMatch<R, S>({
     notices,
     reactions,
     sendReaction,
+    turnSecondsLeft: timedTurnActive ? turnSecondsLeft : null,
+    amSpectator: spectating,
+    requestSpectate,
     sendTurn,
     sendDecision,
     requestSync,

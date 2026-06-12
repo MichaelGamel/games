@@ -145,6 +145,47 @@ export class SoundEngine {
     this.blip(2093, 0.26, 0.12, 'sine', 0.14) // C7 sparkle on top
   }
 
+  /** Metallic "clang" as a shield is picked up — or blocks a snake. */
+  playShield(): void {
+    if (this.muted || !this.ensure()) return
+    this.blip(523.25, 0, 0.16, 'square', 0.18) // C5 clang
+    this.blip(1046.5, 0.02, 0.22, 'triangle', 0.22) // C6 ring
+    this.blip(1568, 0.1, 0.18, 'sine', 0.12) // G6 shimmer
+  }
+
+  /** Two quick crossing "zips" as players swap places. */
+  playSwap(): void {
+    if (this.muted || !this.ensure()) return
+    const ctx = this.ctx
+    const master = this.master
+    if (!ctx || !master) return
+    const t0 = ctx.currentTime
+    for (const [f1, f2] of [
+      [300, 900],
+      [900, 300],
+    ]) {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'triangle'
+      osc.frequency.setValueAtTime(f1, t0)
+      osc.frequency.exponentialRampToValueAtTime(f2, t0 + 0.3)
+      gain.gain.setValueAtTime(0.0001, t0)
+      gain.gain.exponentialRampToValueAtTime(0.16, t0 + 0.03)
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.32)
+      osc.connect(gain).connect(master)
+      osc.start(t0)
+      osc.stop(t0 + 0.35)
+    }
+  }
+
+  /** Wobbly rising "warp" for the mystery teleport. */
+  playTeleport(): void {
+    if (this.muted || !this.ensure()) return
+    const notes = [440, 554.37, 698.46, 880, 1108.73] // A4 C#5 F5 A5 C#6
+    notes.forEach((f, i) => this.blip(f, i * 0.05, 0.12, 'sine', 0.2))
+    this.blip(1760, 0.28, 0.18, 'sine', 0.14) // A6 sparkle
+  }
+
   /** Victory fanfare. */
   playWin(): void {
     if (this.muted || !this.ensure()) return

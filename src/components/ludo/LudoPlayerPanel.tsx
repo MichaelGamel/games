@@ -1,8 +1,9 @@
 import { memo } from 'react'
 import { m } from 'motion/react'
+import { useTranslation } from 'react-i18next'
 import { PROGRESS_BASE, PROGRESS_GOAL, TOKENS_PER_PLAYER } from '../../ludo/config'
 import type { LudoPhase, LudoPlayer } from '../../ludo/types'
-import { placeLabel, placeMedal } from '../../lib/place'
+import { placeKey, placeMedal } from '../../lib/place'
 import { cn } from '../../lib/cn'
 
 interface LudoPlayerPanelProps {
@@ -27,8 +28,12 @@ export const LudoPlayerPanel = memo(function LudoPlayerPanel({
   finishedOrder,
   myId,
 }: LudoPlayerPanelProps) {
+  const { t } = useTranslation(['ludo', 'common'])
   return (
-    <ul className="grid w-full grid-cols-2 gap-1.5 lg:flex lg:flex-col lg:gap-3" aria-label="Players">
+    <ul
+      className="grid w-full grid-cols-2 gap-1.5 lg:flex lg:flex-col lg:gap-3"
+      aria-label={t('common:setup.players')}
+    >
       {players.map((p) => {
         const rank = finishedOrder.indexOf(p.id)
         const finished = rank >= 0
@@ -68,11 +73,19 @@ export const LudoPlayerPanel = memo(function LudoPlayerPanel({
                 <p className="truncate text-sm font-semibold text-white lg:text-base">
                   {p.name}
                   {p.isBot && (
-                    <span className="ml-1 text-xs" title="Computer player" aria-label="computer player">
+                    <span
+                      className="ms-1 text-xs"
+                      title={t('common:game.botPlayer')}
+                      aria-label={t('common:game.botPlayer')}
+                    >
                       🤖
                     </span>
                   )}
-                  {myId === p.id && <span className="ml-1 text-xs font-normal text-white/50">(you)</span>}
+                  {myId === p.id && (
+                    <span className="ms-1 text-xs font-normal text-white/50">
+                      {t('common:game.you')}
+                    </span>
+                  )}
                 </p>
                 {/* Mobile: medal when finished, else home count. */}
                 <span className="shrink-0 text-xs tabular-nums text-white/70 lg:hidden">
@@ -81,11 +94,11 @@ export const LudoPlayerPanel = memo(function LudoPlayerPanel({
                 {/* Desktop: medal + place, or turn marker. */}
                 {finished ? (
                   <span className="hidden shrink-0 text-sm font-bold text-amber-300 lg:inline">
-                    {placeMedal(rank)} {placeLabel(rank)}
+                    {placeMedal(rank)} {t(placeKey(rank))}
                   </span>
                 ) : isActive ? (
                   <span className="hidden shrink-0 text-xs font-semibold uppercase tracking-wide text-white/70 lg:inline">
-                    Your turn
+                    {t('common:game.yourTurn')}
                   </span>
                 ) : null}
               </div>
@@ -109,8 +122,10 @@ export const LudoPlayerPanel = memo(function LudoPlayerPanel({
                     />
                   )
                 })}
-                <span className="ml-auto hidden text-xs tabular-nums text-white/60 lg:inline">
-                  {finished ? 'Home!' : `${home}/${TOKENS_PER_PLAYER} home`}
+                <span className="ms-auto hidden text-xs tabular-nums text-white/60 lg:inline">
+                  {finished
+                    ? t('ludo:panel.home')
+                    : t('ludo:panel.homeCount', { home, total: TOKENS_PER_PLAYER })}
                 </span>
               </div>
 

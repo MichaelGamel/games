@@ -1,0 +1,52 @@
+{
+  "title": "Ludo",
+  "tagline": "Get all four tokens home — capture, block, roll a six.",
+  "setupSubtitle": "2–4 players. Race all four tokens home.",
+  "menu": {
+    "localSubtitle": "Two to four players on one screen. Add computer players too.",
+    "onlineSubtitle": "Create or join a room and play with friends on other devices."
+  },
+  "rules": {
+    "dice": "Dice",
+    "diceHint": "2 dice: move the sum, doubles roll again",
+    "oneDie": "1 die",
+    "twoDice": "2 dice ⚡",
+    "headStart": "Head start",
+    "headStartHint": "begin with one token out",
+    "blockades": "Blockades",
+    "blockadesHint": "two tokens wall a cell",
+    "captureGate": "Capture gate",
+    "captureGateHint": "must capture before entering home",
+    "teams": "Teams (2v2)",
+    "teamsHint": "seats 1&3 vs 2&4",
+    "teamsNeedsFour": "needs exactly 4 players",
+    "off": "Off",
+    "on": "On"
+  },
+  "banner": {
+    "luckySix": "LUCKY 6! 🎲",
+    "doubles": "DOUBLES! 🎲🎲",
+    "capture": "CAPTURE! ⚔️",
+    "rollAgainMe": "— roll again!",
+    "rollAgainOther": "rolls again!"
+  },
+  "selectionHint": "Tap a glowing token to move",
+  "pickToken": "Pick a token",
+  "moveTokenAria": "Move {{name}}'s token",
+  "panel": {
+    "home": "Home!",
+    "homeCount": "{{home}}/{{total}} home"
+  },
+  "status": {
+    "rolling": "{{name}} is rolling the dice…",
+    "moving": "{{name}} is on the move…",
+    "movingRolled": "{{name}} is on the move… (rolled {{dice}})",
+    "turnRoll": "{{name}}'s turn — roll the dice.",
+    "allHome": "{{name}} is all home — {{place}} place!",
+    "podiumSet": "Game over — the podium is set!",
+    "winsGame": "{{name}} wins the game!"
+  },
+  "celebrationMessage": "brought all four tokens home! 🎉",
+  "metaTitle": "Ludo — Robin's Games",
+  "metaDescription": "Ludo on Robin's Games — race all four tokens home, capture opponents and roll a six for an extra turn. Play locally or online with friends in real time."
+}

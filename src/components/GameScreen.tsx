@@ -1,7 +1,9 @@
 import { AnimatePresence, m } from 'motion/react'
-import type { GameController } from '../hooks/useSnakesAndLadders'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
+import type { GameController, SpecialFlashKind } from '../hooks/useSnakesAndLadders'
 import { useRollHotkey } from '../hooks/useRollHotkey'
-import { placeLabel } from '../lib/place'
+import { placeKey } from '../lib/place'
 import { Board } from './board/Board'
 import { PlayerPanel } from './PlayerPanel'
 import { Controls } from './Controls'
@@ -24,6 +26,7 @@ interface GameScreenProps {
  * the side-by-side board + panel layout via a two-column grid.
  */
 export function GameScreen({ game, online }: GameScreenProps) {
+  const { t } = useTranslation(['snakes', 'common', 'online'])
   const myId = game.controlsPlayer === 'all' ? null : game.controlsPlayer
 
   // You can't act if it's not your turn, or (online) too few players remain.
@@ -35,6 +38,8 @@ export function GameScreen({ game, online }: GameScreenProps) {
   const accentColor = game.currentPlayer?.color ?? '#8b5cf6'
   const luckyPlayer =
     game.extraTurnFlash != null ? (game.players[game.extraTurnFlash.playerId] ?? null) : null
+  const specialPlayer =
+    game.specialFlash != null ? (game.players[game.specialFlash.playerId] ?? null) : null
 
   return (
     <m.div
@@ -51,8 +56,7 @@ export function GameScreen({ game, online }: GameScreenProps) {
     >
       <header className="shrink-0 text-center lg:col-start-2">
         <h1 className="text-lg font-bold tracking-tight text-white drop-shadow sm:text-2xl lg:text-3xl">
-          <span aria-hidden="true">🐍</span> Snakes &amp; Ladders{' '}
-          <span aria-hidden="true">🪜</span>
+          <span aria-hidden="true">🐍</span> {t('snakes:title')} <span aria-hidden="true">🪜</span>
         </h1>
         {online && <RoomBadge meta={online} />}
       </header>
@@ -63,16 +67,22 @@ export function GameScreen({ game, online }: GameScreenProps) {
           currentPlayerId={game.currentPlayerIndex}
           phase={game.phase}
           finishedOrder={game.finishedOrder}
+          finishCell={game.board.size * game.board.size}
           myId={myId}
         />
       </div>
 
       <div className="min-h-0 flex-1 lg:col-start-1 lg:row-span-4 lg:row-start-1 lg:self-center">
         <div className="mx-auto flex h-full items-center justify-center lg:block lg:h-auto">
-          {/* 100/107: the board square plus the start lane below it. The ratio
-              lets the board shrink to whatever height the phone leaves over. */}
-          <div className="relative aspect-[100/107] max-h-full w-full max-w-[560px]">
+          {/* The board square plus the start lane below it (one extra
+              half-cell-ish strip). The ratio lets the board shrink to whatever
+              height the phone leaves over. */}
+          <div
+            className="relative max-h-full w-full max-w-[560px]"
+            style={{ aspectRatio: `100 / ${100 + 70 / game.board.size}` }}
+          >
             <Board
+              board={game.board}
               players={game.players}
               activeMove={game.activeMove}
               currentPlayerId={game.currentPlayerIndex}
@@ -84,7 +94,18 @@ export function GameScreen({ game, online }: GameScreenProps) {
                   key={game.extraTurnFlash!.nonce}
                   name={luckyPlayer.name}
                   color={luckyPlayer.color}
+                  doubles={game.rules.diceCount === 2}
                   isMe={myId === luckyPlayer.id || game.controlsPlayer === 'all'}
+                />
+              )}
+            </AnimatePresence>
+            <AnimatePresence>
+              {specialPlayer && game.specialFlash && (
+                <SpecialBanner
+                  key={`special-${game.specialFlash.nonce}`}
+                  kind={game.specialFlash.payload}
+                  name={specialPlayer.name}
+                  color={specialPlayer.color}
                 />
               )}
             </AnimatePresence>
@@ -95,12 +116,13 @@ export function GameScreen({ game, online }: GameScreenProps) {
       <div className="shrink-0 lg:col-start-2">
         <Controls
           phase={game.phase}
-          lastRoll={game.lastRoll}
+          lastDice={game.lastDice}
+          diceCount={game.rules.diceCount}
           accentColor={accentColor}
           muted={game.muted}
           canRoll={canRoll}
-          rollLabel={rollLabel(game, online)}
-          secondaryLabel={online ? 'Leave' : 'New Game'}
+          rollLabel={rollLabel(game, t, online)}
+          secondaryLabel={online ? t('common:actions.leave') : t('common:actions.newGame')}
           onRoll={game.roll}
           onToggleMute={game.toggleMute}
           onSecondary={online ? online.onLeave : game.reset}
@@ -112,14 +134,25 @@ export function GameScreen({ game, online }: GameScreenProps) {
         role="status"
         aria-live="polite"
       >
-        {statusText(game, online)}
+        {statusText(game, t, online)}
       </p>
     </m.div>
   )
 }
 
-/** Festive "rolled a 6 — go again!" burst over the board. */
-function LuckySixBanner({ name, color, isMe }: { name: string; color: string; isMe: boolean }) {
+/** Festive "rolled a 6 (or doubles) — go again!" burst over the board. */
+function LuckySixBanner({
+  name,
+  color,
+  doubles,
+  isMe,
+}: {
+  name: string
+  color: string
+  doubles: boolean
+  isMe: boolean
+}) {
+  const { t } = useTranslation('snakes')
   const sparkles = [
     { x: '-50%', y: '-130%', delay: 0.1 },
     { x: '160%', y: '-90%', delay: 0.25 },
@@ -157,57 +190,104 @@ function LuckySixBanner({ name, color, isMe }: { name: string; color: string; is
         >
           🎲
         </m.span>
-        <p className="text-xl font-bold tracking-wide text-amber-300">LUCKY 6!</p>
+        <p className="text-xl font-bold tracking-wide text-amber-300">
+          {doubles ? t('banner.doubles') : t('banner.luckySix')}
+        </p>
         <p className="mt-0.5 text-sm font-semibold text-white">
-          {isMe ? (
-            <>
-              <span style={{ color }}>{name}</span> — roll again! 🎉
-            </>
-          ) : (
-            <>
-              <span style={{ color }}>{name}</span> rolls again! 🎉
-            </>
-          )}
+          <span style={{ color }}>{name}</span>{' '}
+          {isMe ? t('banner.rollAgainMe') : t('banner.rollAgainOther')}
         </p>
       </m.div>
     </div>
   )
 }
 
-function rollLabel(game: GameController, online?: OnlineMeta): string {
-  if (game.phase === 'rolling') return 'Rolling…'
-  if (game.phase === 'moving') return 'Moving…'
-  if (game.phase === 'celebrating') return 'Celebrating… 🎉'
-  if (game.phase === 'won') return 'Game Over'
-  if (online && !online.canPlay) return 'Waiting…'
-  if (online && !game.isMyTurn) return `${game.currentPlayer?.name ?? 'Opponent'}'s turn`
-  return 'Roll Dice'
+type ScreenT = TFunction<['snakes', 'common', 'online']>
+
+function rollLabel(game: GameController, t: ScreenT, online?: OnlineMeta): string {
+  if (game.phase === 'rolling') return t('common:game.rolling')
+  if (game.phase === 'moving') return t('common:game.moving')
+  if (game.phase === 'celebrating') return t('common:game.celebratingLabel')
+  if (game.phase === 'won') return t('common:game.gameOver')
+  if (online && !online.canPlay) return t('common:game.waiting')
+  if (online && !game.isMyTurn)
+    return t('common:game.opponentsTurn', { name: game.currentPlayer?.name ?? '?' })
+  return t('common:actions.rollDice')
 }
 
-function statusText(game: GameController, online?: OnlineMeta): string {
+function statusText(game: GameController, t: ScreenT, online?: OnlineMeta): string {
   if (game.phase === 'celebrating') {
     const lastId = game.finishedOrder[game.finishedOrder.length - 1]
     const finisher = game.players[lastId]
-    return finisher ? `${finisher.name} takes ${placeLabel(game.finishedOrder.length - 1)} place!` : ''
+    return finisher
+      ? t('snakes:status.takesPlace', {
+          name: finisher.name,
+          place: t(placeKey(game.finishedOrder.length - 1)),
+        })
+      : ''
   }
   if (game.phase === 'won') {
-    if (game.standings.length > 1) return 'Game over — the podium is set!'
-    return game.winner ? `${game.winner.name} wins the game!` : ''
+    if (game.standings.length > 1) return t('snakes:status.podiumSet')
+    return game.winner ? t('snakes:status.winsGame', { name: game.winner.name }) : ''
   }
-  if (online && !online.canPlay) return 'Waiting for a player to reconnect…'
+  if (online && !online.canPlay) return t('online:status.waitingReconnect')
 
   const cur = game.currentPlayer
   if (!cur) return ''
-  if (game.phase === 'rolling') return `${cur.name} is rolling the dice…`
+  if (game.phase === 'rolling') return t('snakes:status.rolling', { name: cur.name })
   if (game.phase === 'moving') {
-    const base = `${cur.name} rolled ${game.lastRoll}.`
-    if (game.activeMove?.kind === 'ladder') return `${base} Climbing a ladder!`
-    if (game.activeMove?.kind === 'snake') return `${base} Down a snake!`
+    const dice =
+      game.lastDice.length > 1 ? `${game.lastRoll} (${game.lastDice.join(' + ')})` : `${game.lastRoll}`
+    const base = t('snakes:status.rolled', { name: cur.name, dice })
+    if (game.activeMove?.kind === 'ladder') return `${base} ${t('snakes:status.climbing')}`
+    if (game.activeMove?.kind === 'snake') return `${base} ${t('snakes:status.downSnake')}`
+    if (game.activeMove?.kind === 'teleport') return `${base} ${t('snakes:status.teleported')}`
     return base
   }
   // idle
   if (online) {
-    return game.isMyTurn ? 'Your turn — roll the dice.' : `Waiting for ${cur.name} to roll…`
+    return game.isMyTurn
+      ? t('online:status.yourTurnRoll')
+      : t('online:status.waitingForRoll', { name: cur.name })
   }
-  return `${cur.name}'s turn — roll the dice.`
+  return t('snakes:status.turnRoll', { name: cur.name })
+}
+
+/** Translation keys for each special-cell banner. */
+const SPECIAL_KEYS = {
+  shield: { title: 'banner.shield', line: 'banner.shieldLine' },
+  'shield-used': { title: 'banner.shieldUsed', line: 'banner.shieldUsedLine' },
+  swap: { title: 'banner.swap', line: 'banner.swapLine' },
+  mystery: { title: 'banner.teleport', line: 'banner.teleportLine' },
+} as const
+
+/** Burst over the board when a special cell fires. */
+function SpecialBanner({
+  kind,
+  name,
+  color,
+}: {
+  kind: SpecialFlashKind
+  name: string
+  color: string
+}) {
+  const { t } = useTranslation('snakes')
+  const copy = SPECIAL_KEYS[kind]
+  return (
+    <div className="pointer-events-none absolute inset-x-0 top-1/2 z-40 flex justify-center px-4">
+      <m.div
+        initial={{ scale: 0.3, y: 20, opacity: 0 }}
+        animate={{ scale: [0.3, 1.1, 1], y: 0, opacity: 1 }}
+        exit={{ scale: 0.6, y: -14, opacity: 0 }}
+        transition={{ duration: 0.4, ease: [0.16, 0.84, 0.3, 1] }}
+        className="rounded-2xl bg-night-800/95 px-6 py-3 text-center shadow-2xl ring-2 ring-sky-300/70 backdrop-blur"
+        role="status"
+      >
+        <p className="text-lg font-bold tracking-wide text-sky-300">{t(copy.title)}</p>
+        <p className="mt-0.5 text-sm font-semibold text-white">
+          <span style={{ color }}>{name}</span> {t(copy.line)}
+        </p>
+      </m.div>
+    </div>
+  )
 }

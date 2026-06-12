@@ -1,8 +1,8 @@
 import { memo } from 'react'
 import { m } from 'motion/react'
-import { TOTAL_CELLS } from '../game/config'
+import { useTranslation } from 'react-i18next'
 import type { Phase, Player } from '../game/types'
-import { placeLabel, placeMedal } from '../lib/place'
+import { placeKey, placeMedal } from '../lib/place'
 import { cn } from '../lib/cn'
 
 interface PlayerPanelProps {
@@ -11,6 +11,8 @@ interface PlayerPanelProps {
   phase: Phase
   /** Player ids in podium order (finished players wear their medal). */
   finishedOrder: number[]
+  /** The winning cell (board size squared) — drives the progress bars. */
+  finishCell: number
   /** In online play, the id of the local player (to mark "you"). */
   myId?: number | null
 }
@@ -24,15 +26,20 @@ export const PlayerPanel = memo(function PlayerPanel({
   currentPlayerId,
   phase,
   finishedOrder,
+  finishCell,
   myId,
 }: PlayerPanelProps) {
+  const { t } = useTranslation(['common'])
   return (
-    <ul className="grid w-full grid-cols-2 gap-1.5 lg:flex lg:flex-col lg:gap-3" aria-label="Players">
+    <ul
+      className="grid w-full grid-cols-2 gap-1.5 lg:flex lg:flex-col lg:gap-3"
+      aria-label={t('setup.players')}
+    >
       {players.map((p) => {
         const rank = finishedOrder.indexOf(p.id)
         const finished = rank >= 0
         const isActive = p.id === currentPlayerId && phase !== 'won' && !finished
-        const progress = Math.round((p.position / TOTAL_CELLS) * 100)
+        const progress = Math.round((p.position / finishCell) * 100)
 
         return (
           <m.li
@@ -62,12 +69,27 @@ export const PlayerPanel = memo(function PlayerPanel({
               <div className="flex items-center justify-between gap-2">
                 <p className="truncate text-sm font-semibold text-white lg:text-base">
                   {p.name}
+                  {p.shield && (
+                    <span
+                      className="ms-1 text-xs"
+                      title={t('game.holdingShield')}
+                      aria-label={t('game.holdingShield')}
+                    >
+                      🛡️
+                    </span>
+                  )}
                   {p.isBot && (
-                    <span className="ml-1 text-xs" title="Computer player" aria-label="computer player">
+                    <span
+                      className="ms-1 text-xs"
+                      title={t('game.botPlayer')}
+                      aria-label={t('game.botPlayer')}
+                    >
                       🤖
                     </span>
                   )}
-                  {myId === p.id && <span className="ml-1 text-xs font-normal text-white/50">(you)</span>}
+                  {myId === p.id && (
+                    <span className="ms-1 text-xs font-normal text-white/50">{t('game.you')}</span>
+                  )}
                 </p>
                 {/* Mobile: tiny right slot — medal when finished, cell number otherwise. */}
                 <span className="shrink-0 text-xs tabular-nums text-white/70 lg:hidden">
@@ -76,11 +98,11 @@ export const PlayerPanel = memo(function PlayerPanel({
                 {/* Desktop: medal + place, or turn marker. */}
                 {finished ? (
                   <span className="hidden shrink-0 text-sm font-bold text-amber-300 lg:inline">
-                    {placeMedal(rank)} {placeLabel(rank)}
+                    {placeMedal(rank)} {t(placeKey(rank))}
                   </span>
                 ) : isActive ? (
                   <span className="hidden shrink-0 text-xs font-semibold uppercase tracking-wide text-white/70 lg:inline">
-                    Your turn
+                    {t('game.yourTurn')}
                   </span>
                 ) : null}
               </div>
@@ -95,7 +117,7 @@ export const PlayerPanel = memo(function PlayerPanel({
                   />
                 </div>
                 <span className="w-14 shrink-0 text-right text-xs tabular-nums text-white/70">
-                  {p.position === 0 ? 'Start' : `${p.position}/${TOTAL_CELLS}`}
+                  {p.position === 0 ? t('game.start') : `${p.position}/${finishCell}`}
                 </span>
               </div>
             </div>

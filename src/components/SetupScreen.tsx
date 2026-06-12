@@ -1,11 +1,14 @@
 import { useState } from 'react'
 import { m } from 'motion/react'
-import { DEFAULT_PLAYERS, MAX_PLAYERS, MIN_PLAYERS, TOKEN_COLORS } from '../game/config'
+import { useTranslation } from 'react-i18next'
+import { DEFAULT_PLAYERS, DEFAULT_SNAKES_RULES, MAX_PLAYERS, MIN_PLAYERS, TOKEN_COLORS } from '../game/config'
 import type { PlayerSetup } from '../game/gameReducer'
+import type { SnakesRules } from '../game/types'
+import { SnakesRulesPicker } from './SnakesRulesPicker'
 import { cn } from '../lib/cn'
 
 interface SetupScreenProps {
-  onStart: (players: PlayerSetup[]) => void
+  onStart: (players: PlayerSetup[], rules: SnakesRules) => void
   onBack?: () => void
 }
 
@@ -19,9 +22,11 @@ const item = {
 } as const
 
 export function SetupScreen({ onStart, onBack }: SetupScreenProps) {
+  const { t } = useTranslation(['snakes', 'common'])
   const [players, setPlayers] = useState<PlayerSetup[]>(() =>
     DEFAULT_PLAYERS.map((p) => ({ ...p })),
   )
+  const [rules, setRules] = useState<SnakesRules>({ ...DEFAULT_SNAKES_RULES })
 
   const update = (index: number, patch: Partial<PlayerSetup>) =>
     setPlayers((prev) => prev.map((p, i) => (i === index ? { ...p, ...patch } : p)))
@@ -59,6 +64,8 @@ export function SetupScreen({ onStart, onBack }: SetupScreenProps) {
         color: p.color,
         isBot: p.isBot ?? false,
       })),
+      // Mint the surprise-board seed at the moment the match starts.
+      { ...rules, seed: Math.floor(Math.random() * 2 ** 31) },
     )
 
   return (
@@ -77,7 +84,7 @@ export function SetupScreen({ onStart, onBack }: SetupScreenProps) {
           onClick={onBack}
           className="absolute left-4 top-4 rounded-lg px-3 py-1.5 text-sm text-white/70 ring-1 ring-white/15 transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
         >
-          ← Menu
+          ← {t('common:menu.back')}
         </m.button>
       )}
 
@@ -87,10 +94,9 @@ export function SetupScreen({ onStart, onBack }: SetupScreenProps) {
           animate={{ y: [0, -6, 0] }}
           transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
         >
-          <span aria-hidden="true">🐍</span> Snakes &amp; Ladders{' '}
-          <span aria-hidden="true">🪜</span>
+          <span aria-hidden="true">🐍</span> {t('snakes:title')} <span aria-hidden="true">🪜</span>
         </m.h1>
-        <p className="mt-3 text-white/70">2–4 players. One board. Roll your way to 100.</p>
+        <p className="mt-3 text-white/70">{t('snakes:setupSubtitle')}</p>
       </m.header>
 
       <m.div
@@ -117,13 +123,13 @@ export function SetupScreen({ onStart, onBack }: SetupScreenProps) {
                 htmlFor={`player-${index}`}
                 className="flex-1 text-sm font-semibold text-white/80"
               >
-                Player {index + 1}
+                {t('common:setup.player', { n: index + 1 })}
               </label>
               {players.length > MIN_PLAYERS && (
                 <button
                   type="button"
                   onClick={() => removePlayer(index)}
-                  aria-label={`Remove player ${index + 1}`}
+                  aria-label={t('common:setup.removePlayer', { n: index + 1 })}
                   className="grid h-7 w-7 place-items-center rounded-full text-white/60 ring-1 ring-white/15 transition hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
                 >
                   ✕
@@ -137,12 +143,12 @@ export function SetupScreen({ onStart, onBack }: SetupScreenProps) {
               value={p.name}
               maxLength={14}
               onChange={(e) => update(index, { name: e.target.value })}
-              placeholder={`Player ${index + 1}`}
+              placeholder={t('common:setup.player', { n: index + 1 })}
               className="w-full rounded-lg bg-night-900/60 px-3 py-2 text-white placeholder-white/40 outline-none ring-1 ring-white/15 focus:ring-2 focus:ring-white/50"
             />
 
             <div className="mt-4">
-              <p className="mb-2 text-xs uppercase tracking-wide text-white/50">Token color</p>
+              <p className="mb-2 text-xs uppercase tracking-wide text-white/50">{t('common:setup.tokenColor')}</p>
               <div className="flex flex-wrap gap-2">
                 {TOKEN_COLORS.map((c) => {
                   const selected = p.color === c.value
@@ -165,11 +171,11 @@ export function SetupScreen({ onStart, onBack }: SetupScreenProps) {
             </div>
 
             <div className="mt-4">
-              <p className="mb-2 text-xs uppercase tracking-wide text-white/50">Player type</p>
+              <p className="mb-2 text-xs uppercase tracking-wide text-white/50">{t('common:setup.playerType')}</p>
               <div className="flex gap-2">
                 {[
-                  { bot: false, label: '🧑 Human' },
-                  { bot: true, label: '🤖 Computer' },
+                  { bot: false, label: t('common:setup.human') },
+                  { bot: true, label: t('common:setup.bot') },
                 ].map((opt) => {
                   const selected = (p.isBot ?? false) === opt.bot
                   return (
@@ -200,9 +206,13 @@ export function SetupScreen({ onStart, onBack }: SetupScreenProps) {
             onClick={addPlayer}
             className="grid min-h-32 place-items-center rounded-2xl border-2 border-dashed border-white/20 text-white/60 transition hover:border-white/40 hover:bg-white/5 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
           >
-            <span className="text-lg font-semibold">＋ Add player</span>
+            <span className="text-lg font-semibold">{t('common:setup.addPlayer')}</span>
           </button>
         )}
+      </m.div>
+
+      <m.div variants={item} className="w-full max-w-2xl">
+        <SnakesRulesPicker value={rules} onChange={setRules} />
       </m.div>
 
       <m.button
@@ -213,7 +223,7 @@ export function SetupScreen({ onStart, onBack }: SetupScreenProps) {
         whileTap={{ scale: 0.96 }}
         className="rounded-xl bg-linear-to-r from-grape to-grape-light px-10 py-4 text-xl font-bold text-white shadow-xl ring-1 ring-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
       >
-        Start Game ▶
+        {t('common:actions.startGame')}
       </m.button>
     </m.div>
   )

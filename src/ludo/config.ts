@@ -104,6 +104,35 @@ export const BASE_NEST_COORDS: readonly (readonly RC[])[] = [
  */
 export const SAFE_CELLS: ReadonlySet<number> = new Set([0, 13, 26, 39, 8, 21, 34, 47])
 
+import type { LudoRules } from './types'
+
+/** The canonical game: one die, all tokens in base, blockades on, no gates. */
+export const DEFAULT_LUDO_RULES: Readonly<LudoRules> = {
+  diceCount: 1,
+  startWithOneOut: false,
+  blockades: true,
+  captureToEnterHome: false,
+  teams: false,
+}
+
+/**
+ * Validate a rules payload that arrived over the wire (or default it). A
+ * malformed payload must never crash the reducer — fall back to the classic
+ * game. (Team play additionally requires exactly 4 players; the reducer
+ * enforces that part, since only it sees the lineup.)
+ */
+export function asLudoRules(value: unknown): LudoRules {
+  if (typeof value !== 'object' || value == null) return { ...DEFAULT_LUDO_RULES }
+  const v = value as Partial<LudoRules>
+  return {
+    diceCount: v.diceCount === 2 ? 2 : 1,
+    startWithOneOut: v.startWithOneOut === true,
+    blockades: v.blockades !== false,
+    captureToEnterHome: v.captureToEnterHome === true,
+    teams: v.teams === true,
+  }
+}
+
 export interface ColorOption {
   name: string
   value: string

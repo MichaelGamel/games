@@ -44,7 +44,7 @@ describe('START_GAME', () => {
 
 describe('the phase machine', () => {
   it('walks roll → select → move', () => {
-    let s = ludoReducer(start(2), { type: 'BEGIN_ROLL', roll: 6 })
+    let s = ludoReducer(start(2), { type: 'BEGIN_ROLL', dice: [6] })
     expect(s.phase).toBe('rolling')
     expect(s.lastRoll).toBe(6)
     s = ludoReducer(s, { type: 'BEGIN_SELECT' })
@@ -169,7 +169,7 @@ describe('SKIP_TURN', () => {
   })
 
   it('is ignored unless the game is waiting for a roll', () => {
-    const rolling = ludoReducer(start(2), { type: 'BEGIN_ROLL', roll: 3 })
+    const rolling = ludoReducer(start(2), { type: 'BEGIN_ROLL', dice: [3] })
     expect(ludoReducer(rolling, { type: 'SKIP_TURN' })).toBe(rolling)
   })
 })
@@ -202,9 +202,10 @@ describe('LOAD_SNAPSHOT', () => {
     const s = ludoReducer(initialLudoState, {
       type: 'LOAD_SNAPSHOT',
       players: [
-        { name: 'A', color: '#f00', tokens: [56, 10, -1, -1] },
-        { name: 'B', color: '#00f', tokens: [3, -1, -1, -1] },
+        { name: 'A', color: '#f00', tokens: [56, 10, -1, -1], hasCaptured: true },
+        { name: 'B', color: '#00f', tokens: [3, -1, -1, -1], hasCaptured: false },
       ],
+      rules: { diceCount: 1, startWithOneOut: false, blockades: true, captureToEnterHome: false, teams: false },
       currentPlayerIndex: 1,
       lastRoll: 2,
       finishedOrder: [],
@@ -217,16 +218,18 @@ describe('LOAD_SNAPSHOT', () => {
     expect(s.turnCount).toBe(9)
     expect(s.consecutiveSixes).toBe(1)
     expect(s.players[0].tokens).toEqual([56, 10, -1, -1])
+    expect(s.players[0].hasCaptured).toBe(true)
   })
 
   it('restores a mid-celebration snapshot', () => {
     const s = ludoReducer(initialLudoState, {
       type: 'LOAD_SNAPSHOT',
       players: [
-        { name: 'A', color: '#f00', tokens: [56, 56, 56, 56] },
-        { name: 'B', color: '#00f', tokens: [4, -1, -1, -1] },
-        { name: 'C', color: '#0f0', tokens: [9, -1, -1, -1] },
+        { name: 'A', color: '#f00', tokens: [56, 56, 56, 56], hasCaptured: false },
+        { name: 'B', color: '#00f', tokens: [4, -1, -1, -1], hasCaptured: false },
+        { name: 'C', color: '#0f0', tokens: [9, -1, -1, -1], hasCaptured: false },
       ],
+      rules: { diceCount: 1, startWithOneOut: false, blockades: true, captureToEnterHome: false, teams: false },
       currentPlayerIndex: 0,
       lastRoll: 2,
       finishedOrder: [0],
@@ -256,5 +259,79 @@ describe('online sync determinism', () => {
       b = ludoReducer(b, { type: 'COMMIT_TURN', resolution: rb })
     }
     expect(a).toEqual(b)
+  })
+})
+
+describe('rule variants in the reducer', () => {
+  it('startWithOneOut seats each player with one token on the entry square', () => {
+    const s = ludoReducer(initialLudoState, {
+      type: 'START_GAME',
+      players: [
+        { name: 'A', color: '#f00' },
+        { name: 'B', color: '#00f' },
+      ],
+      rules: { diceCount: 1, startWithOneOut: true, blockades: true, captureToEnterHome: false, teams: false },
+    })
+    expect(s.players.every((p) => p.tokens[0] === 0)).toBe(true)
+    expect(s.players.every((p) => p.tokens.slice(1).every((t) => t === -1))).toBe(true)
+  })
+
+  it('quietly disables team play without exactly 4 players', () => {
+    const s = ludoReducer(initialLudoState, {
+      type: 'START_GAME',
+      players: [
+        { name: 'A', color: '#f00' },
+        { name: 'B', color: '#00f' },
+      ],
+      rules: { diceCount: 1, startWithOneOut: false, blockades: true, captureToEnterHome: false, teams: true },
+    })
+    expect(s.rules.teams).toBe(false)
+  })
+
+  it('records a capture on the capturing seat (the capture gate)', () => {
+    let s = start(2)
+    s = withTokens(s, 0, [4, -1, -1, -1])
+    s = withTokens(s, 1, [46, -1, -1, -1])
+    const next = commit(s, resolveLudoMove(s, 0, 3))
+    expect(next.players[0].hasCaptured).toBe(true)
+    expect(next.players[1].hasCaptured).toBe(false)
+  })
+
+  describe('teams: the match ends when one team is fully home', () => {
+    const start4Teams = () =>
+      ludoReducer(initialLudoState, {
+        type: 'START_GAME',
+        players: Array.from({ length: 4 }, (_, i) => ({ name: `P${i}`, color: '#000' })),
+        rules: { diceCount: 1, startWithOneOut: false, blockades: true, captureToEnterHome: false, teams: true },
+      })
+
+    const finishSeat = (s: LudoGameState, seat: number) => {
+      const positioned = { ...withTokens(s, seat, [56, 56, 56, 53]), currentPlayerIndex: seat }
+      return commit(positioned, resolveLudoMove(positioned, 3, 3))
+    }
+
+    it('keeps racing after the first teammate finishes (no celebration pause)', () => {
+      const s = finishSeat(start4Teams(), 0)
+      expect(s.phase).toBe('idle') // no celebrating in team play
+      expect(s.finishedOrder).toEqual([0])
+      expect(s.currentPlayerIndex).toBe(1)
+    })
+
+    it('ends with the team win when the partner comes home too', () => {
+      let s = finishSeat(start4Teams(), 0) // seat 0 (team A) home
+      s = finishSeat(s, 2) // seat 2 (team A) home → team A wins
+      expect(s.phase).toBe('won')
+      expect(s.finishedOrder).toEqual([0, 2])
+      expect(s.winnerId).toBe(0)
+      expect(s.winReason).toBe('goal')
+    })
+  })
+
+  it('RESTORE replaces the whole state (local undo)', () => {
+    const before = start(2)
+    const after = commit(before, resolveLudoMove(before, 0, 6))
+    expect(after.turnCount).toBe(1)
+    const restored = ludoReducer(after, { type: 'RESTORE', state: before })
+    expect(restored).toBe(before)
   })
 })

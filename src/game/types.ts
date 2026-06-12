@@ -14,14 +14,60 @@ export interface Jump {
   kind: JumpKind
 }
 
+/**
+ * A special-effect cell:
+ * - `shield`  — pick up a shield; it blocks the next snake you'd slide down.
+ * - `swap`    — swap positions with the player furthest ahead of you.
+ * - `mystery` — teleport to a random cell (resolved by the acting client and
+ *               carried in the {@link TurnResolution}, so replays agree).
+ */
+export type SpecialKind = 'shield' | 'swap' | 'mystery'
+
+/**
+ * Everything that defines a playable board. The classic layout lives in
+ * `config.ts`; random layouts come from `boardGen.ts`, derived from a seed so
+ * every client builds the identical board.
+ */
+export interface BoardLayout {
+  /** Cells per side; the board is size×size and the finish is size². */
+  size: number
+  /** Ladder foot → ladder top (always climbing up). */
+  ladders: Record<number, number>
+  /** Snake head → snake tail (always sliding down). */
+  snakes: Record<number, number>
+  /** Special-effect cells. Never on a jump endpoint, cell 1, or the finish. */
+  specials: Record<number, SpecialKind>
+}
+
+/**
+ * The rule variant for one match — chosen at setup (host chooses online) and
+ * broadcast inside `start`, so every client plays the same game.
+ */
+export interface SnakesRules {
+  /** `classic` is the canonical 10×10 layout; `random` is generated from `seed`. */
+  board: 'classic' | 'random'
+  /** Seed for the random board and for special-cell placement. */
+  seed: number
+  /** Board side: 10 = the classic 100-cell race, 8 = a quick 64-cell race
+   *  (8 implies a generated board — there is no canonical 8×8 layout). */
+  size: 8 | 10
+  /** Dice per roll. With two dice you move the sum, and *doubles* (not sixes)
+   *  grant the extra turn. */
+  diceCount: 1 | 2
+  /** Sprinkle shield/swap/mystery cells onto the board. */
+  specials: boolean
+}
+
 export interface Player {
   /** Stable 0-based index, also used as turn order. */
   id: number
   name: string
   /** Token color as a CSS hex string. */
   color: string
-  /** Current cell: 0 = off-board start, 1..100 on the board. */
+  /** Current cell: 0 = off-board start, 1..size² on the board. */
   position: number
+  /** Holds a shield (blocks the next snake; specials rule only). */
+  shield: boolean
   /**
    * True for a computer-controlled player (local "Pass & Play" only). Carried
    * data, never a rule — the reducer never branches on it; the orchestration
@@ -52,7 +98,14 @@ export interface GameState {
   players: Player[]
   currentPlayerIndex: number
   phase: Phase
-  lastRoll: DieValue | null
+  /** The match's rule variant (fixed at START_GAME). */
+  rules: SnakesRules
+  /** The playable board, derived from `rules` (fixed at START_GAME). */
+  board: BoardLayout
+  /** Total of the last roll (sum when playing with two dice). */
+  lastRoll: number | null
+  /** The last roll's individual dice (empty before the first roll / after a resync). */
+  lastDice: DieValue[]
   /** First-place finisher (`finishedOrder[0]`), or the forfeit survivor. */
   winnerId: number | null
   winReason: WinReason | null
@@ -75,20 +128,25 @@ export interface GameState {
 /**
  * The transient, mid-animation override for the one token currently in motion.
  * While present, the UI shows this token at `cell` (instead of its committed
- * position) and uses `kind` to choose the right motion (hop / climb / slide).
+ * position) and uses `kind` to choose the right motion (hop / climb / slide /
+ * teleport sparkle).
  */
 export interface ActiveMove {
   playerId: number
   cell: number
-  kind: 'walk' | 'ladder' | 'snake'
+  kind: 'walk' | 'ladder' | 'snake' | 'teleport'
 }
 
 /**
  * The fully-computed outcome of a single roll. Pure data describing *what
- * happened* so the UI can animate it step by step without re-deriving rules.
+ * happened* so the UI can animate it step by step without re-deriving rules —
+ * and the entire over-the-wire contract for online play.
  */
 export interface TurnResolution {
-  roll: DieValue
+  /** The dice as rolled (one or two). */
+  dice: DieValue[]
+  /** Total moved — the sum of `dice`. */
+  roll: number
   from: number
   /** Cells to step through after `from`, in order, ending on `landed`. */
   walkPath: number[]
@@ -98,9 +156,28 @@ export interface TurnResolution {
   landed: number
   /** The snake/ladder taken from `landed`, if any. */
   jump: Jump | null
-  /** Final resting cell for this turn (after `jump`, or `landed`). */
+  /** A held shield blocked the snake at `landed` (token stays; shield spent). */
+  shieldUsed: boolean
+  /** The special cell entered at the end of the move, if any. */
+  special: SpecialKind | null
+  /** A shield was picked up this turn. */
+  shieldGained: boolean
+  /** Swap special: id of the leader this player traded places with. */
+  swapWith: number | null
+  /** Swap special: the cell the swapped player ends up on (our pre-swap cell). */
+  swapPartnerPos: number | null
+  /** Mystery special: the teleport destination. */
+  teleportTo: number | null
+  /** Final resting cell for this turn (after jump/special effects). */
   finalPos: number
   isWin: boolean
-  /** True when the player earns another roll (rolled a 6 and did not win). */
+  /** True when the player earns another roll (a 6 — or doubles with two dice —
+   *  that did not win). */
   extraTurn: boolean
+}
+
+/** Per-seat wire payload for online snapshots and heartbeats. */
+export interface SnakesSeatState {
+  position: number
+  shield: boolean
 }

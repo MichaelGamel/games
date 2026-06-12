@@ -28,16 +28,27 @@ import {
   type PlayerSetup,
   type PlayerSnapshot,
 } from '../game/gameReducer'
-import { resolveTurn, rollDie } from '../game/rules'
+import { resolveTurn, rollDice } from '../game/rules'
+import { asSnakesRules } from '../game/boardGen'
 import { TIMING } from '../game/config'
-import type { ActiveMove, DieValue, MatchDecision, TurnResolution } from '../game/types'
+import type {
+  ActiveMove,
+  MatchDecision,
+  SnakesRules,
+  SpecialKind,
+  TurnResolution,
+} from '../game/types'
 import { createTurnSequencer, type SequencerHandlers } from '../lib/turnSequencer'
+import type { MatchLog } from '../lib/matchLog'
 import { useFlash, type GameFlash } from './useFlash'
 import { useSound } from './useSound'
 
 export type { GameFlash }
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+
+/** What a special-cell banner announces (shield-used = a snake was blocked). */
+export type SpecialFlashKind = SpecialKind | 'shield-used'
 
 export interface GameNetHooks {
   /**
@@ -49,7 +60,7 @@ export interface GameNetHooks {
   /** Fired after a *local* continue/end decision so it can be broadcast. */
   onLocalDecision?: (decision: MatchDecision, seq: number) => void
   /** Fired when this client starts/restarts the game (host broadcasts it). */
-  onStart?: (players: PlayerSetup[]) => void
+  onStart?: (players: PlayerSetup[], rules: SnakesRules) => void
   /** Fired when a remote turn arrives out of order — we missed one or more
    *  turns and need a fresh state snapshot from another client. */
   onOutOfSync?: () => void
@@ -66,8 +77,13 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
   const [activeMove, setActiveMove] = useState<ActiveMove | null>(null)
   // "Rolled a 6 — go again!" celebration, shown on every client.
   const extraTurnFlash = useFlash()
+  // A special cell fired (shield pickup/use, swap, teleport) — banner for all.
+  const specialFlash = useFlash<SpecialFlashKind>()
   // "X's turn was skipped" notice (the player left the room).
   const skipFlash = useFlash()
+  // Every committed event since START_GAME — feeds the recap and the replay.
+  // Null when this client joined mid-match (it never saw the early turns).
+  const [matchLog, setMatchLog] = useState<MatchLog<TurnResolution, SnakesRules> | null>(null)
   const { sound, muted, toggleMute } = useSound()
   const reduced = useReducedMotion()
 
@@ -84,11 +100,12 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
   const timings = useMemo(
     () =>
       reduced
-        ? { dice: 250, step: 45, jump: 180, handoff: 120 }
+        ? { dice: 250, step: 45, jump: 180, special: 200, handoff: 120 }
         : {
             dice: TIMING.diceRollMs,
             step: TIMING.stepMs,
             jump: TIMING.jumpMs,
+            special: TIMING.specialMs,
             handoff: TIMING.turnHandoffMs,
           },
     [reduced],
@@ -103,7 +120,7 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
       if (!player) return
 
       // 1) Tumble the dice.
-      dispatch({ type: 'BEGIN_ROLL', roll: resolution.roll })
+      dispatch({ type: 'BEGIN_ROLL', dice: resolution.dice })
       sound.playRoll()
       await delay(timings.dice)
       if (!alive()) return
@@ -117,29 +134,57 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
         if (!alive()) return
       }
 
-      // 3) Take the snake / ladder, if any.
+      // 3) Take the snake / ladder — or watch a shield block the snake.
       if (resolution.jump) {
         setActiveMove({ playerId: player.id, cell: resolution.jump.to, kind: resolution.jump.kind })
         if (resolution.jump.kind === 'ladder') sound.playLadder()
         else sound.playSnake()
         await delay(timings.jump)
         if (!alive()) return
+      } else if (resolution.shieldUsed) {
+        sound.playShield()
+        specialFlash.trigger(player.id, TIMING.specialFlashMs, 'shield-used')
+        await delay(timings.special)
+        if (!alive()) return
       }
 
-      // 4) Settle, then commit (batched so the token never flashes back).
+      // 4) Special cell effects (the banner explains what just happened).
+      if (resolution.shieldGained) {
+        sound.playShield()
+        specialFlash.trigger(player.id, TIMING.specialFlashMs, 'shield')
+        await delay(timings.special)
+        if (!alive()) return
+      } else if (resolution.swapWith != null) {
+        sound.playSwap()
+        specialFlash.trigger(player.id, TIMING.specialFlashMs, 'swap')
+        // Both tokens spring to their new cells when the commit lands below.
+        await delay(timings.special)
+        if (!alive()) return
+      } else if (resolution.teleportTo != null) {
+        sound.playTeleport()
+        specialFlash.trigger(player.id, TIMING.specialFlashMs, 'mystery')
+        setActiveMove({ playerId: player.id, cell: resolution.teleportTo, kind: 'teleport' })
+        await delay(timings.special)
+        if (!alive()) return
+      }
+
+      // 5) Settle, then commit (batched so the token never flashes back).
       await delay(timings.handoff)
       if (!alive()) return
       setActiveMove(null)
       dispatch({ type: 'COMMIT_TURN', resolution })
+      setMatchLog((log) =>
+        log && { ...log, events: [...log.events, { kind: 'turn', seat: player.id, resolution }] },
+      )
       if (resolution.isWin) {
         sound.playWin()
       } else if (resolution.extraTurn) {
-        // Lucky six! Same player goes again — celebrate on every client.
+        // Lucky six (or doubles)! Same player goes again — on every client.
         sound.playExtraTurn()
         extraTurnFlash.trigger(player.id, TIMING.extraTurnFlashMs)
       }
     },
-    [sound, timings, extraTurnFlash],
+    [sound, timings, extraTurnFlash, specialFlash],
   )
 
   /** Hand the turn to the next active player because the current one left. */
@@ -149,10 +194,14 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
     sound.playSkip()
     skipFlash.trigger(snap.currentPlayerIndex, TIMING.skipFlashMs)
     dispatch({ type: 'SKIP_TURN' })
+    setMatchLog((log) =>
+      log && { ...log, events: [...log.events, { kind: 'skip', seat: snap.currentPlayerIndex }] },
+    )
   }, [sound, skipFlash])
 
   const executeDecision = useCallback((decision: MatchDecision) => {
     dispatch({ type: decision === 'continue' ? 'CONTINUE_MATCH' : 'END_MATCH' })
+    setMatchLog((log) => log && { ...log, events: [...log.events, { kind: 'decision', decision }] })
   }, [])
 
   // The shared sequencing core: orders, dedupes, and drains every
@@ -179,7 +228,13 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
     // never double-fire on a double-tap (the phase only changes next render).
     if (!sequencer.acquireTurnLock()) return
     try {
-      const resolution = resolveTurn(player.position, rollDie())
+      const resolution = resolveTurn({
+        board: snap.board,
+        positions: snap.players.map((p) => p.position),
+        playerIndex: snap.currentPlayerIndex,
+        hasShield: player.shield,
+        dice: rollDice(snap.rules.diceCount),
+      })
       hooksRef.current?.onLocalTurn?.(resolution, sequencer.claimSeq())
       await executeTurn(resolution, sequencer.beginRun())
     } finally {
@@ -229,24 +284,29 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
   const clearTransients = useCallback(() => {
     setActiveMove(null)
     extraTurnFlash.clear()
+    specialFlash.clear()
     skipFlash.clear()
-  }, [extraTurnFlash, skipFlash])
+  }, [extraTurnFlash, specialFlash, skipFlash])
 
   const startGame = useCallback(
-    (players: PlayerSetup[]) => {
+    (players: PlayerSetup[], rules?: SnakesRules) => {
+      const matchRules = asSnakesRules(rules)
       sequencer.rebase(0)
       clearTransients()
-      dispatch({ type: 'START_GAME', players })
-      hooksRef.current?.onStart?.(players)
+      dispatch({ type: 'START_GAME', players, rules: matchRules })
+      setMatchLog({ players: players.map((p) => ({ ...p })), rules: matchRules, events: [] })
+      hooksRef.current?.onStart?.(players, matchRules)
     },
     [sequencer, clearTransients],
   )
 
   const applyRemoteStart = useCallback(
-    (players: PlayerSetup[]) => {
+    (players: PlayerSetup[], rules?: unknown) => {
+      const matchRules = asSnakesRules(rules)
       sequencer.rebase(0)
       clearTransients()
-      dispatch({ type: 'START_GAME', players })
+      dispatch({ type: 'START_GAME', players, rules: matchRules })
+      setMatchLog({ players: players.map((p) => ({ ...p })), rules: matchRules, events: [] })
     },
     [sequencer, clearTransients],
   )
@@ -263,8 +323,9 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
   const loadSnapshot = useCallback(
     (snapshot: {
       players: PlayerSnapshot[]
+      rules: SnakesRules
       currentPlayerIndex: number
-      lastRoll: DieValue | null
+      lastRoll: number | null
       finishedOrder: number[]
       awaitingDecision: boolean
       ended: boolean
@@ -273,6 +334,8 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
       sequencer.rebase(snapshot.turnCount)
       clearTransients()
       dispatch({ type: 'LOAD_SNAPSHOT', ...snapshot })
+      // Joined (or repaired) mid-match: the early turns are unknowable.
+      setMatchLog(null)
     },
     [sequencer, clearTransients],
   )
@@ -304,6 +367,7 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
   const reset = useCallback(() => {
     sequencer.rebase(0)
     clearTransients()
+    setMatchLog(null)
     dispatch({ type: 'RESET' })
   }, [sequencer, clearTransients])
 
@@ -324,7 +388,9 @@ export function useSnakesAndLadders({ controlsPlayer = 'all', hooks }: UseGameOp
     winner,
     standings,
     activeMove,
+    matchLog,
     extraTurnFlash: extraTurnFlash.flash,
+    specialFlash: specialFlash.flash,
     skipFlash: skipFlash.flash,
     muted,
     toggleMute,

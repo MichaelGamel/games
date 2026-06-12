@@ -1,0 +1,83 @@
+{
+  "lobby": {
+    "title": "Play Online",
+    "subtitle": "Create a room and share the code, or join a friend's.",
+    "createTab": "Create room",
+    "joinTab": "Join room",
+    "yourName": "Your name",
+    "namePlaceholder": "Player",
+    "tokenColor": "Token color",
+    "roomCode": "Room code",
+    "createRoom": "Create Room ▶",
+    "joinRoom": "Join Room ▶"
+  },
+  "waiting": {
+    "shareCode": "Share this code",
+    "shareHint": "Friends enter it on the “Join room” screen.",
+    "codeAria": "Room code {{code}}, click to copy",
+    "copyInvite": "Copy invite link",
+    "linkCopied": "Link copied!",
+    "joinedRoom": "Joined room",
+    "waitingForPlayers": "Waiting for players… (need {{min}}+)",
+    "waitingForHost": "Waiting for the host to start…",
+    "playersCount": "Players {{count}}/{{max}}",
+    "playersAria": "Players in room",
+    "host": "host",
+    "testModeHint": "Test mode: works across tabs in this browser only. Add Supabase keys for real cross-computer play.",
+    "connectErrorTitle": "Couldn't connect",
+    "connectErrorBody": "Online play isn't configured. Add your Supabase keys and redeploy, or run locally in dev test mode.",
+    "leave": "Leave"
+  },
+  "reject": {
+    "fullTitle": "Room is full",
+    "fullDetail": "This room is already at its player limit. Ask for another room code.",
+    "nameTakenTitle": "That name is taken",
+    "nameTakenDetail": "Someone in this room is already using that name. Go back and pick another.",
+    "colorTakenTitle": "That color is taken",
+    "colorTakenDetail": "Someone in this room already has that token color. Go back and choose a different one.",
+    "backToChange": "← Back to change",
+    "watchInstead": "👀 Watch instead",
+    "declinedTitle": "Not this time",
+    "declinedBody": "The host declined your request to join. You can try a different room.",
+    "backToLobby": "← Back to lobby"
+  },
+  "pending": {
+    "title": "Asking the host…",
+    "body": "This match is already in progress. The host has been asked to let you in — hang tight."
+  },
+  "spectate": {
+    "title": "Tuning in…",
+    "body": "Fetching the live match from the players — you'll be watching in a moment.",
+    "watching": "👀 Watching"
+  },
+  "joinRequests": {
+    "wantsToJoin": "Wants to join",
+    "accept": "Accept",
+    "reject": "Reject",
+    "betweenTurns": "You can let players in between turns."
+  },
+  "badge": {
+    "connected": "Connected",
+    "playerAway": "Player away",
+    "testMode": "test mode",
+    "timerAria": "{{count}} seconds left this turn"
+  },
+  "notices": {
+    "left": "🚪 {{name}} left the game",
+    "back": "👋 {{name}} is back",
+    "skipped": "⏭️ {{name}} is away — turn skipped",
+    "newHost": "👑 {{name}} is now the host"
+  },
+  "status": {
+    "waitingReconnect": "Waiting for a player to reconnect…",
+    "yourTurnRoll": "Your turn — roll the dice.",
+    "waitingForRoll": "Waiting for {{name}} to roll…"
+  },
+  "reactions": {
+    "open": "Reactions",
+    "react": "React {{emoji}}",
+    "someone": "Someone"
+  },
+  "subtitleForfeit": "All other players left the game.",
+  "subtitleForfeitDuo": "The other player left the game."
+}

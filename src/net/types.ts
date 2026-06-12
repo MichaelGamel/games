@@ -13,7 +13,7 @@
  * Both default to Snakes' shapes (`TurnResolution`, `number`), so every Snakes
  * call site keeps resolving to exactly today's types with no annotations.
  */
-import type { DieValue, MatchDecision, TurnResolution } from '../game/types'
+import type { MatchDecision, TurnResolution } from '../game/types'
 
 /** The host creates the room (seat 0 + the one who starts); guests join it. */
 export type Role = 'host' | 'guest'
@@ -58,8 +58,12 @@ export interface RunningSnapshot<S = number> {
   lineup: StartPlayer[]
   /** Per-seat board state, parallel to `lineup` (Snakes: the cell index). */
   positions: S[]
+  /** The match's rule variant, opaque to the net layer (each game validates
+   *  its own shape on receipt). */
+  rules?: unknown
   currentPlayerIndex: number
-  lastRoll: DieValue | null
+  /** Total of the last roll (sum when playing with two dice). */
+  lastRoll: number | null
   /** Seats that already finished, in podium order. */
   finishedOrder: number[]
   /** True when paused on a mid-game finish, awaiting the host's decision. */
@@ -85,7 +89,7 @@ export interface RunningSnapshot<S = number> {
  * backgrounded tab whose connection silently lapsed).
  */
 export type RoomMessage<R = TurnResolution, S = number> =
-  | { event: 'start'; players: StartPlayer[]; matchId: number }
+  | { event: 'start'; players: StartPlayer[]; matchId: number; rules?: unknown }
   | { event: 'turn'; resolution: R; seq: number; matchId: number }
   // The current player left the room: commit number `seq` hands the turn to
   // the next active player on every client.
@@ -109,8 +113,11 @@ export type RoomMessage<R = TurnResolution, S = number> =
       positions: S[]
       winnerId: number | null
     }
-  // "I'm behind — somebody send me the current state."
-  | { event: 'sync-request'; clientId: string }
+  // "I'm behind — somebody send me the current state." `spectate` marks a
+  // non-seated client asking to watch: seated players answer it even though
+  // the requester is not in the lineup (a pending *joiner* without the flag
+  // still has to wait for the host's approval).
+  | { event: 'sync-request'; clientId: string; spectate?: boolean }
   // Authoritative state for one lagging client (addressed by clientId).
   | { event: 'sync-state'; toClientId: string; fromHost: boolean; snapshot: RunningSnapshot<S> }
   // A quick emoji reaction. Purely cosmetic and ephemeral: it never touches

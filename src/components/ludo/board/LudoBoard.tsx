@@ -10,7 +10,7 @@ import {
   type RC,
 } from '../../../ludo/config'
 import type { LudoActiveMove } from '../../../hooks/useLudo'
-import type { LudoPhase, LudoPlayer } from '../../../ludo/types'
+import type { LudoPhase, LudoPlayer, TokenMoveOption } from '../../../ludo/types'
 import { LudoCell } from './LudoCell'
 import { LudoBaseNest } from './LudoBaseNest'
 import { LudoToken } from './LudoToken'
@@ -22,6 +22,8 @@ interface LudoBoardProps {
   phase: LudoPhase
   /** Token ids the current seat may tap (selection pause); empty otherwise. */
   selectableTokens: number[]
+  /** The full options behind `selectableTokens` — drives the destination hints. */
+  selectableMoves: TokenMoveOption[]
   onSelectToken: (tokenId: number) => void
 }
 
@@ -150,6 +152,7 @@ export const LudoBoard = memo(function LudoBoard({
   currentPlayerIndex,
   phase,
   selectableTokens,
+  selectableMoves,
   onSelectToken,
 }: LudoBoardProps) {
   // Build the token list, applying the in-flight move override.
@@ -181,6 +184,25 @@ export const LudoBoard = memo(function LudoBoard({
 
       {/* un-clipped token layer */}
       <div className="pointer-events-none absolute inset-0">
+        {/* Move hints: where each selectable token would land (⚔️ = capture). */}
+        {phase === 'selecting' &&
+          selectableMoves.map((move) => {
+            const { x, y } = tokenPercent(currentPlayerIndex, move.tokenId, move.to)
+            return (
+              <span
+                key={`hint-${move.tokenId}`}
+                className="absolute z-[35] grid -translate-x-1/2 -translate-y-1/2 place-items-center"
+                style={{ left: `${x}%`, top: `${y}%`, width: `${TOKEN_SIZE}%`, height: `${TOKEN_SIZE}%` }}
+                aria-hidden="true"
+              >
+                <span className="absolute inset-0 animate-ping rounded-full bg-white/40" />
+                <span className="absolute inset-0 rounded-full border-2 border-dashed border-white/90" />
+                {move.captures.length > 0 && (
+                  <span className="relative text-[2vmin] drop-shadow">⚔️</span>
+                )}
+              </span>
+            )
+          })}
         {tokens.map((t, i) => {
           const group = groups.get(`${Math.round(t.x)},${Math.round(t.y)}`)!
           const { dx, dy } = clusterOffset(group.indexOf(i), group.length)

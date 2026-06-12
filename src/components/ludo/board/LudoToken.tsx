@@ -1,5 +1,6 @@
 import { memo } from 'react'
 import { m, useReducedMotion, type Transition } from 'motion/react'
+import { useTranslation } from 'react-i18next'
 import { cn } from '../../../lib/cn'
 
 export type LudoMoveKind = 'step' | 'release' | 'home'
@@ -51,6 +52,7 @@ export const LudoToken = memo(function LudoToken({
   z,
   size,
 }: LudoTokenProps) {
+  const { t } = useTranslation('ludo')
   const reduced = useReducedMotion()
 
   const positionTransition: Transition =
@@ -119,7 +121,7 @@ export const LudoToken = memo(function LudoToken({
           <button
             type="button"
             onClick={() => onSelect(tokenId)}
-            aria-label={`Move ${name}'s token`}
+            aria-label={t('moveTokenAria', { name })}
             className={discClass}
             style={discStyle}
           >

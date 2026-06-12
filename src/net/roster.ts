@@ -47,7 +47,10 @@ export interface RosterResult {
  * a joiner goes back and picks again. Pending joiners reserve the open seats in
  * join order, so a fifth arrival is turned away rather than queued.
  */
-export function computeRoster(members: readonly RoomMember[]): RosterResult {
+export function computeRoster(
+  members: readonly RoomMember[],
+  maxPlayers: number = MAX_PLAYERS,
+): RosterResult {
   const ordered = orderMembers(members)
   const seats: RoomMember[] = ordered.filter((m) => m.inGame)
   const pending: RoomMember[] = []
@@ -65,7 +68,7 @@ export function computeRoster(members: readonly RoomMember[]): RosterResult {
     if (member.inGame) continue // already seated above
 
     // Open seats are shared by current seats and already-reserved pending ones.
-    if (seats.length + pending.length >= MAX_PLAYERS) {
+    if (seats.length + pending.length >= maxPlayers) {
       rejected.set(member.clientId, 'full')
       continue
     }
@@ -79,25 +82,4 @@ export function computeRoster(members: readonly RoomMember[]): RosterResult {
   }
 
   return { seats, pending, rejected }
-}
-
-/** User-facing copy for a rejection. */
-export function reasonText(reason: RejectReason): { title: string; detail: string } {
-  switch (reason) {
-    case 'full':
-      return {
-        title: 'Room is full',
-        detail: `This room already has the maximum of ${MAX_PLAYERS} players. Ask for another room code.`,
-      }
-    case 'name-taken':
-      return {
-        title: 'That name is taken',
-        detail: 'Someone in this room is already using that name. Go back and pick another.',
-      }
-    case 'color-taken':
-      return {
-        title: 'That color is taken',
-        detail: 'Someone in this room already has that token color. Go back and choose a different one.',
-      }
-  }
 }

@@ -1,0 +1,100 @@
+{
+  "appName": "ألعاب روبن",
+  "hub": {
+    "title": "ألعاب روبن",
+    "subtitle": "اختر لعبة — العبوا بالتناوب على شاشة واحدة أو عبر الإنترنت مع الأصدقاء.",
+    "play": "العب",
+    "playGame": "العب {{title}}",
+    "hallOfFame": "قاعة المشاهير",
+    "winsOf_zero": "{{wins}} فوز / {{games}}",
+    "winsOf_one": "فوز واحد / {{games}}",
+    "winsOf_two": "فوزان / {{games}}",
+    "winsOf_few": "{{wins}} انتصارات / {{games}}",
+    "winsOf_many": "{{wins}} فوزًا / {{games}}",
+    "winsOf_other": "{{wins}} فوز / {{games}}",
+    "streak": "{{count}} انتصارات متتالية",
+    "metaTitle": "ألعاب روبن — السلم والثعبان، ليدو، كونكت فور",
+    "metaDescription": "ألعاب روبن هي مجموعة ألعاب لوحية متقنة ومتحركة لـ ٢–٤ لاعبين. العب السلم والثعبان أو ليدو أو كونكت فور — بالتناوب على شاشة واحدة أو عبر الإنترنت مع الأصدقاء."
+  },
+  "menu": {
+    "back": "القائمة",
+    "passAndPlay": "العب بالتناوب",
+    "playOnline": "العب عبر الإنترنت",
+    "onlineDisabled": "أضِف مفاتيح Supabase لتفعيل اللعب بين الأجهزة (انظر README)."
+  },
+  "actions": {
+    "startGame": "ابدأ اللعبة ▶",
+    "newGame": "لعبة جديدة",
+    "playAgain": "العب مجددًا",
+    "leave": "خروج",
+    "cancel": "إلغاء",
+    "close": "إغلاق",
+    "undo": "تراجع",
+    "undoAria": "التراجع عن الدور الأخير",
+    "sound": "الصوت",
+    "muted": "صامت",
+    "muteAria": "كتم المؤثرات الصوتية",
+    "unmuteAria": "تشغيل المؤثرات الصوتية",
+    "watchReplay": "🎬 شاهد الإعادة",
+    "rollDice": "ارمِ النرد"
+  },
+  "setup": {
+    "player": "اللاعب {{n}}",
+    "computer": "الكمبيوتر {{n}}",
+    "tokenColor": "لون الحجر",
+    "discColor": "لون القرص",
+    "playerType": "نوع اللاعب",
+    "human": "🧑 إنسان",
+    "bot": "🤖 كمبيوتر",
+    "botEasy": "😌 سهل",
+    "botSmart": "🧠 ذكي",
+    "addPlayer": "＋ أضِف لاعبًا",
+    "removePlayer": "إزالة اللاعب {{n}}",
+    "gameRules": "قواعد اللعبة",
+    "players": "اللاعبون"
+  },
+  "game": {
+    "you": "(أنت)",
+    "yourTurn": "دورك",
+    "turn": "الدور",
+    "start": "البداية",
+    "rolling": "يرمي النرد…",
+    "moving": "يتحرك…",
+    "celebratingLabel": "احتفال… 🎉",
+    "gameOver": "انتهت اللعبة",
+    "waiting": "انتظار…",
+    "opponentsTurn": "دور {{name}}",
+    "botPlayer": "لاعب كمبيوتر",
+    "holdingShield": "يحمل درعًا"
+  },
+  "place": {
+    "p1": "الأول",
+    "p2": "الثاني",
+    "p3": "الثالث",
+    "p4": "الرابع"
+  },
+  "overlay": {
+    "winnerTitle": "لدينا فائز!",
+    "standingsTitle": "الترتيب النهائي!",
+    "wins": "{{name}} فاز! 🎉",
+    "standingsAria": "الترتيب النهائي",
+    "winnerAria": "{{name}} فاز",
+    "newPlayers": "لاعبون جدد",
+    "matchRecap": "ملخص المباراة",
+    "celebrationTitle": "المركز {{place}}!",
+    "celebrationRace": "السباق على المركز التالي ما زال مستمرًا.",
+    "keepPlaying": "واصلوا اللعب ▶",
+    "endGame": "إنهاء اللعبة — عرض الترتيب",
+    "waitingForDecision": "في انتظار قرار {{name}}…",
+    "drawTitle": "تعادل!",
+    "drawBody": "امتلأت اللوحة دون أن يصل أحد إلى أربعة متتالية.",
+    "drawAria": "تعادل"
+  },
+  "confirmLeave": {
+    "title": "هل ستغادر بهذه السرعة؟",
+    "body": "سنحزن لرحيلك! هل أنت متأكد أنك تريد مغادرة اللعبة؟",
+    "stay": "واصل اللعب 🎲",
+    "leave": "غادر اللعبة"
+  },
+  "loading": "جارٍ التحميل…"
+}

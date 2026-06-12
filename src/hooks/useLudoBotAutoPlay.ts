@@ -14,24 +14,10 @@
 import { useEffect } from 'react'
 import { useReducedMotion } from 'motion/react'
 import { TIMING } from '../ludo/config'
-import type { TokenMoveOption } from '../ludo/types'
+import { chooseBotMove } from '../ludo/bot'
 import type { LudoController } from './useLudo'
 
-/**
- * Pick a bot's move from the legal options. Deterministic — ties break by token
- * order (the order `legalMoves` returns), so every client agrees if it ever runs
- * this. Priority: capture an opponent, else release a token from base, else
- * advance the furthest-along token.
- */
-export function chooseBotMove(moves: TokenMoveOption[]): TokenMoveOption {
-  const captures = moves.filter((m) => m.captures.length > 0)
-  if (captures.length > 0) {
-    return captures.reduce((best, m) => (m.captures.length > best.captures.length ? m : best))
-  }
-  const release = moves.find((m) => m.releasedFromBase)
-  if (release) return release
-  return moves.reduce((best, m) => (m.to > best.to ? m : best))
-}
+export { chooseBotMove }
 
 export function useLudoBotAutoPlay(game: LudoController): void {
   const reduced = useReducedMotion()
@@ -49,11 +35,19 @@ export function useLudoBotAutoPlay(game: LudoController): void {
   }, [phase, currentPlayerIndex, turnCount, currentIsBot, reduced, roll])
 
   // Resolve the selection pause when a bot's roll left more than one option.
+  const botLevel = game.currentPlayer?.botLevel ?? 'easy'
   useEffect(() => {
     if (phase !== 'selecting' || !currentIsBot || selectableMoves.length === 0) return
-    const choice = chooseBotMove(selectableMoves)
-    const thinkMs = reduced ? 150 : TIMING.botThinkMs
-    const timer = setTimeout(() => void selectToken(choice.tokenId), thinkMs)
+    const timer = setTimeout(() => {
+      // Re-read the live state at fire time for the smart bot's threat map.
+      const choice = chooseBotMove(selectableMoves, {
+        state: game,
+        seat: game.currentPlayerIndex,
+        level: botLevel,
+      })
+      void selectToken(choice.tokenId)
+    }, reduced ? 150 : TIMING.botThinkMs)
     return () => clearTimeout(timer)
-  }, [phase, currentIsBot, selectableMoves, reduced, selectToken])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, currentIsBot, selectableMoves, reduced, selectToken, botLevel])
 }

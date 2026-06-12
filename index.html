@@ -54,8 +54,12 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Fredoka = Latin display face; Tajawal = Arabic fallback (geometric, pairs
+         with Fredoka). Loaded here as a real <link> because a CSS @import of a
+         remote font gets dropped by the Tailwind v4 build. Per-codepoint matching
+         means Arabic glyphs use Tajawal while Latin stays Fredoka. -->
     <link
-      href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Tajawal:wght@400;500;700&display=swap"
       rel="stylesheet"
     />
   </head>

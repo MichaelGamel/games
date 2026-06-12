@@ -1,5 +1,5 @@
 import { cellToPercent } from '../../game/board'
-import { LADDERS, SNAKES } from '../../game/config'
+import type { BoardLayout } from '../../game/types'
 import { Snake } from './Snake'
 
 /**
@@ -9,7 +9,8 @@ import { Snake } from './Snake'
  *
  * Ladders are simple rail-and-rung shapes; snakes are delegated to the d3-based
  * {@link Snake} component, which gives each a distinct color, marking, and
- * tapering body. Geometry only — no game state — so it never re-renders mid-play.
+ * tapering body. Geometry only — derived from the per-match board layout, so it
+ * never re-renders mid-play (the parent surface is memoized on the layout).
  */
 
 interface Point {
@@ -65,12 +66,12 @@ function Ladder({ from, to, id }: { from: Point; to: Point; id: number }) {
   )
 }
 
-export function SnakesLaddersLayer() {
-  const ladders = Object.entries(LADDERS).map(([from, to]) => ({
-    from: cellToPercent(Number(from)),
-    to: cellToPercent(to),
+export function SnakesLaddersLayer({ board }: { board: BoardLayout }) {
+  const ladders = Object.entries(board.ladders).map(([from, to]) => ({
+    from: cellToPercent(Number(from), board.size),
+    to: cellToPercent(to, board.size),
   }))
-  const snakes = Object.entries(SNAKES).map(([from, to]) => ({
+  const snakes = Object.entries(board.snakes).map(([from, to]) => ({
     head: Number(from),
     tail: to,
   }))
@@ -119,10 +120,10 @@ export function SnakesLaddersLayer() {
         <Ladder key={`l-${i}`} id={i} from={l.from} to={l.to} />
       ))}
       {snakes.map((s, i) => (
-        <Snake key={`sb-${i}`} layer="body" index={i} head={s.head} tail={s.tail} />
+        <Snake key={`sb-${i}`} layer="body" index={i} head={s.head} tail={s.tail} size={board.size} />
       ))}
       {snakes.map((s, i) => (
-        <Snake key={`sh-${i}`} layer="head" index={i} head={s.head} tail={s.tail} />
+        <Snake key={`sh-${i}`} layer="head" index={i} head={s.head} tail={s.tail} size={board.size} />
       ))}
     </svg>
   )

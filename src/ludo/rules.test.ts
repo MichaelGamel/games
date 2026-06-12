@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { legalMoves, resolveLudoMove, rollDie } from './rules'
+import { DEFAULT_LUDO_RULES } from './config'
 import type { LudoGameState } from './types'
 
 /** Build a minimal idle state from each seat's 4 token progresses. */
@@ -10,11 +11,14 @@ function makeState(tokensPerSeat: number[][], partial: Partial<LudoGameState> = 
       name: `P${id}`,
       color: '#000',
       tokens: [...tokens],
+      hasCaptured: false,
       isBot: false,
     })),
     currentPlayerIndex: 0,
     phase: 'idle',
+    rules: { ...DEFAULT_LUDO_RULES },
     lastRoll: null,
+    lastDice: [],
     winnerId: null,
     winReason: null,
     finishedOrder: [],
@@ -164,5 +168,110 @@ describe('extra turn on a non-final six', () => {
     expect(r.extraTurn).toBe(true)
     expect(r.sixCount).toBe(1)
     expect(r.to).toBe(11)
+  })
+})
+
+describe('rule variants', () => {
+  const rules = (over: Partial<LudoGameState['rules']>) => ({
+    diceCount: 1 as const,
+    startWithOneOut: false,
+    blockades: true,
+    captureToEnterHome: false,
+    teams: false,
+    ...over,
+  })
+
+  describe('two dice', () => {
+    it('moves a board token by the sum of both dice', () => {
+      const s = makeState([[5, -1, -1, -1], base()], { rules: rules({ diceCount: 2 }) })
+      const r = resolveLudoMove(s, 0, [3, 4])
+      expect(r.roll).toBe(7)
+      expect(r.to).toBe(12)
+      expect(r.dice).toEqual([3, 4])
+    })
+
+    it('releases on a 6 on either die', () => {
+      const s = makeState([base(), base()], { rules: rules({ diceCount: 2 }) })
+      expect(legalMoves(s, 0, [6, 2]).every((m) => m.releasedFromBase)).toBe(true)
+      expect(legalMoves(s, 0, [2, 5])).toEqual([])
+    })
+
+    it('doubles (not sixes) chain the extra turn', () => {
+      const s = makeState([[5, -1, -1, -1], base()], { rules: rules({ diceCount: 2 }) })
+      expect(resolveLudoMove(s, 0, [4, 4]).extraTurn).toBe(true)
+      expect(resolveLudoMove(s, 0, [6, 2]).extraTurn).toBe(false)
+    })
+
+    it('a third consecutive doubles is a forced no-move', () => {
+      const s = makeState([[5, -1, -1, -1], base()], {
+        rules: rules({ diceCount: 2 }),
+        consecutiveSixes: 2,
+      })
+      expect(legalMoves(s, 0, [4, 4])).toEqual([])
+      const r = resolveLudoMove(s, 0, [4, 4])
+      expect(r.noMove).toBe(true)
+      expect(r.sixCount).toBe(3)
+    })
+  })
+
+  describe('blockades off', () => {
+    it('lets tokens pass straight through opponent pairs', () => {
+      const s = makeState([[8, -1, -1, -1], [49, 49, -1, -1]], {
+        rules: rules({ blockades: false }),
+      })
+      expect(legalMoves(s, 0, 4)).toHaveLength(1) // blocked when blockades are on
+    })
+  })
+
+  describe('capture gate', () => {
+    it('closes the home column until the seat captures', () => {
+      const s = makeState([[50, 56, 56, 56], base()], {
+        rules: rules({ captureToEnterHome: true }),
+      })
+      expect(legalMoves(s, 0, 3)).toEqual([]) // 50 → 53 enters the home column
+    })
+
+    it('opens it after a capture', () => {
+      const s = makeState([[50, 56, 56, 56], base()], {
+        rules: rules({ captureToEnterHome: true }),
+      })
+      s.players[0].hasCaptured = true
+      expect(legalMoves(s, 0, 3)).toHaveLength(1)
+    })
+  })
+
+  describe('teams (2v2)', () => {
+    const teamState = () =>
+      makeState(
+        [
+          [4, -1, -1, -1], // seat 0 — team A
+          [46, -1, -1, -1], // seat 1 — team B (on abs 7 from seat 0's view? no: 46+13=59%52=7) ✔
+          [33, -1, -1, -1], // seat 2 — team A (abs (26+33)%52 = 7)
+          base(), // seat 3 — team B
+        ],
+        { rules: rules({ teams: true }) },
+      )
+
+    it('never captures a teammate', () => {
+      // Seat 0 moves 4 → 7 (abs 7). Seat 2 (teammate) sits on abs 7 too:
+      // (26 + 33) % 52 = 7. Only the rival seat 1 token is captured.
+      const s = teamState()
+      const r = resolveLudoMove(s, 0, 3)
+      expect(r.captures).toEqual([{ seat: 1, tokenId: 0 }])
+    })
+
+    it('teammate blockades are transparent', () => {
+      const s = makeState(
+        [
+          [8, -1, -1, -1], // seat 0
+          base(),
+          [35, 35, -1, -1], // seat 2 — teammate pair on abs (26+35)%52 = 9
+          base(),
+        ],
+        { rules: rules({ teams: true }) },
+      )
+      // 8 → 12 passes abs 9..12; the teammate pair on abs 9 must not block.
+      expect(legalMoves(s, 0, 4)).toHaveLength(1)
+    })
   })
 })

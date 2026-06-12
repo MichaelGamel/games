@@ -1,5 +1,7 @@
 import { lazy, Suspense, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { AnimatePresence } from 'motion/react'
+import { useTranslation } from 'react-i18next'
 import { MainMenu } from './components/MainMenu'
 import { LocalGame } from './components/LocalGame'
 import { Backdrop } from './components/Backdrop'
@@ -18,11 +20,15 @@ type Mode = 'menu' | 'local' | 'online'
 const onlineEnabled = isSupabaseConfigured || import.meta.env.DEV
 
 export default function App() {
-  const [mode, setMode] = useState<Mode>('menu')
+  // A shared invite link (`/snakes?room=CODE`) jumps straight into the online
+  // lobby with the code pre-filled. Consumed once on mount.
+  const [searchParams] = useSearchParams()
+  const [initialRoomCode] = useState(() => searchParams.get('room')?.toUpperCase() ?? undefined)
+  const [mode, setMode] = useState<Mode>(initialRoomCode && onlineEnabled ? 'online' : 'menu')
+  const { t } = useTranslation(['snakes', 'common'])
   useDocumentMeta({
-    title: "Snakes & Ladders — Robin's Games",
-    description:
-      'Roll the dice, climb the ladders, dodge the snakes — race your friends to 100. A polished, animated Snakes & Ladders for 2–4 players: pass-and-play on one screen or online in real time.',
+    title: t('snakes:metaTitle'),
+    description: t('snakes:metaDescription'),
   })
 
   return (
@@ -40,9 +46,13 @@ export default function App() {
         {mode === 'online' && (
           <Suspense
             key="online"
-            fallback={<div className="relative z-10 grid min-h-screen place-items-center text-white/70">Loading…</div>}
+            fallback={
+              <div className="relative z-10 grid min-h-screen place-items-center text-white/70">
+                {t('common:loading')}
+              </div>
+            }
           >
-            <OnlineGame onExit={() => setMode('menu')} />
+            <OnlineGame onExit={() => setMode('menu')} initialRoomCode={initialRoomCode} />
           </Suspense>
         )}
       </AnimatePresence>

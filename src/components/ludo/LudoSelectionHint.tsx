@@ -1,4 +1,5 @@
 import { m } from 'motion/react'
+import { useTranslation } from 'react-i18next'
 
 /**
  * The prompt shown during the local selection pause: more than one token can
@@ -6,6 +7,7 @@ import { m } from 'motion/react'
  * actually this client's turn to choose.
  */
 export function LudoSelectionHint() {
+  const { t } = useTranslation('ludo')
   return (
     <m.div
       initial={{ opacity: 0, y: -10, scale: 0.95 }}
@@ -22,7 +24,7 @@ export function LudoSelectionHint() {
         >
           👆
         </m.span>
-        Tap a glowing token to move
+        {t('selectionHint')}
       </span>
     </m.div>
   )

@@ -32,15 +32,17 @@ import {
   type PlayerSetup,
   type PlayerSnapshot,
 } from '../ludo/ludoReducer'
-import { legalMoves, resolveLudoMove, rollDie } from '../ludo/rules'
-import { TIMING } from '../ludo/config'
+import { legalMoves, resolveLudoMove, rollLudoDice } from '../ludo/rules'
+import { asLudoRules, TIMING } from '../ludo/config'
 import type {
-  DieValue,
+  LudoGameState,
+  LudoRules,
   LudoTurnResolution,
   MatchDecision,
   TokenMoveOption,
 } from '../ludo/types'
 import { createTurnSequencer, type SequencerHandlers } from '../lib/turnSequencer'
+import type { MatchLog } from '../lib/matchLog'
 import { useFlash, type GameFlash } from './useFlash'
 import { useSound } from './useSound'
 
@@ -64,7 +66,7 @@ export interface LudoNetHooks {
   /** Fired after a *local* continue/end decision so it can be broadcast. */
   onLocalDecision?: (decision: MatchDecision, seq: number) => void
   /** Fired when this client starts/restarts the game (host broadcasts it). */
-  onStart?: (players: PlayerSetup[]) => void
+  onStart?: (players: PlayerSetup[], rules: LudoRules) => void
   /** Fired when a remote turn arrives out of order — we missed one or more turns
    *  and need a fresh state snapshot from another client. */
   onOutOfSync?: () => void
@@ -78,8 +80,9 @@ export interface UseLudoOptions {
 
 interface LoadSnapshotArgs {
   players: PlayerSnapshot[]
+  rules: LudoRules
   currentPlayerIndex: number
-  lastRoll: DieValue | null
+  lastRoll: number | null
   finishedOrder: number[]
   awaitingDecision: boolean
   ended: boolean
@@ -87,12 +90,20 @@ interface LoadSnapshotArgs {
   consecutiveSixes: number
 }
 
+/** How many committed states the local undo stack keeps. */
+const UNDO_DEPTH = 40
+
 export function useLudo({ controlsPlayer = 'all', hooks }: UseLudoOptions = {}) {
   const [state, dispatch] = useReducer(ludoReducer, initialLudoState)
   const [activeMove, setActiveMove] = useState<LudoActiveMove | null>(null)
   // The legal moves awaiting a tap while in `selecting` (local only). Empty
   // otherwise. Held as state so the board re-renders the highlight.
   const [selectableMoves, setSelectableMoves] = useState<TokenMoveOption[]>([])
+  // Local pass-and-play only: pre-roll snapshots, newest last (the undo stack).
+  const [history, setHistory] = useState<LudoGameState[]>([])
+  // Every committed event since START_GAME — feeds the recap and the replay.
+  // Null when this client joined mid-match (it never saw the early turns).
+  const [matchLog, setMatchLog] = useState<MatchLog<LudoTurnResolution, LudoRules> | null>(null)
   // "Rolled a 6 / captured — go again!" celebration, shown on every client.
   const extraTurnFlash = useFlash()
   // "X's turn was skipped" notice (the player left the room).
@@ -141,7 +152,7 @@ export function useLudo({ controlsPlayer = 'all', hooks }: UseLudoOptions = {}) 
 
       // 1) Tumble the dice (unless the caller already did).
       if (!opts?.skipRoll) {
-        dispatch({ type: 'BEGIN_ROLL', roll: resolution.roll })
+        dispatch({ type: 'BEGIN_ROLL', dice: resolution.dice })
         sound.playRoll()
         await delay(timings.dice)
         if (!alive()) return
@@ -152,6 +163,9 @@ export function useLudo({ controlsPlayer = 'all', hooks }: UseLudoOptions = {}) 
         await delay(timings.noMove)
         if (!alive()) return
         dispatch({ type: 'COMMIT_TURN', resolution })
+        setMatchLog((log) =>
+          log && { ...log, events: [...log.events, { kind: 'turn', seat, resolution }] },
+        )
         return
       }
 
@@ -191,6 +205,9 @@ export function useLudo({ controlsPlayer = 'all', hooks }: UseLudoOptions = {}) 
       if (!alive()) return
       setActiveMove(null)
       dispatch({ type: 'COMMIT_TURN', resolution })
+      setMatchLog((log) =>
+        log && { ...log, events: [...log.events, { kind: 'turn', seat, resolution }] },
+      )
       if (resolution.isWin) {
         sound.playWin()
       } else if (resolution.extraTurn) {
@@ -208,10 +225,14 @@ export function useLudo({ controlsPlayer = 'all', hooks }: UseLudoOptions = {}) 
     sound.playSkip()
     skipFlash.trigger(snap.currentPlayerIndex, TIMING.skipFlashMs)
     dispatch({ type: 'SKIP_TURN' })
+    setMatchLog((log) =>
+      log && { ...log, events: [...log.events, { kind: 'skip', seat: snap.currentPlayerIndex }] },
+    )
   }, [sound, skipFlash])
 
   const executeDecision = useCallback((decision: MatchDecision) => {
     dispatch({ type: decision === 'continue' ? 'CONTINUE_MATCH' : 'END_MATCH' })
+    setMatchLog((log) => log && { ...log, events: [...log.events, { kind: 'decision', decision }] })
   }, [])
 
   // The shared sequencing core: orders, dedupes, and drains every
@@ -236,16 +257,20 @@ export function useLudo({ controlsPlayer = 'all', hooks }: UseLudoOptions = {}) 
     if (!snap.players[seat]) return
     if (!sequencer.acquireTurnLock()) return
     try {
+      // Local hot-seat: remember the pre-roll state so this turn can be undone.
+      if (controlsPlayer === 'all') {
+        setHistory((prev) => [...prev.slice(-(UNDO_DEPTH - 1)), snap])
+      }
       // Tumble the dice first, then decide: auto-resolve, pause for a choice, or
       // a no-move turn.
       const alive = sequencer.beginRun()
-      const die = rollDie()
-      dispatch({ type: 'BEGIN_ROLL', roll: die })
+      const dice = rollLudoDice(snap.rules.diceCount)
+      dispatch({ type: 'BEGIN_ROLL', dice })
       sound.playRoll()
       await delay(timings.dice)
       if (!alive()) return
 
-      const moves = legalMoves(snap, seat, die)
+      const moves = legalMoves(snap, seat, dice)
       if (moves.length > 1) {
         // More than one option — wait for the player (or bot) to choose.
         dispatch({ type: 'BEGIN_SELECT' })
@@ -253,7 +278,7 @@ export function useLudo({ controlsPlayer = 'all', hooks }: UseLudoOptions = {}) 
         return
       }
       const tokenId = moves[0]?.tokenId ?? -1
-      const resolution = resolveLudoMove(snap, tokenId, die)
+      const resolution = resolveLudoMove(snap, tokenId, dice)
       hooksRef.current?.onLocalTurn?.(resolution, sequencer.claimSeq())
       await executeTurn(resolution, sequencer.beginRun(), { skipRoll: true })
     } finally {
@@ -267,15 +292,15 @@ export function useLudo({ controlsPlayer = 'all', hooks }: UseLudoOptions = {}) 
       const snap = stateRef.current
       if (snap.phase !== 'selecting') return
       if (controlsPlayer !== 'all' && controlsPlayer !== snap.currentPlayerIndex) return
-      const die = snap.lastRoll
-      if (die == null) return
+      const dice = snap.lastDice
+      if (dice.length === 0) return
       // Re-validate the tap against the rules (ignore taps on illegal tokens).
-      const moves = legalMoves(snap, snap.currentPlayerIndex, die)
+      const moves = legalMoves(snap, snap.currentPlayerIndex, dice)
       if (!moves.some((m) => m.tokenId === tokenId)) return
       if (!sequencer.acquireTurnLock()) return
       try {
         setSelectableMoves([])
-        const resolution = resolveLudoMove(snap, tokenId, die)
+        const resolution = resolveLudoMove(snap, tokenId, dice)
         hooksRef.current?.onLocalTurn?.(resolution, sequencer.claimSeq())
         await executeTurn(resolution, sequencer.beginRun(), { skipRoll: true })
       } finally {
@@ -326,20 +351,26 @@ export function useLudo({ controlsPlayer = 'all', hooks }: UseLudoOptions = {}) 
   }, [extraTurnFlash, skipFlash])
 
   const startGame = useCallback(
-    (players: PlayerSetup[]) => {
+    (players: PlayerSetup[], rules?: LudoRules) => {
+      const matchRules = asLudoRules(rules)
       sequencer.rebase(0)
       clearTransients()
-      dispatch({ type: 'START_GAME', players })
-      hooksRef.current?.onStart?.(players)
+      setHistory([])
+      dispatch({ type: 'START_GAME', players, rules: matchRules })
+      setMatchLog({ players: players.map((p) => ({ ...p })), rules: matchRules, events: [] })
+      hooksRef.current?.onStart?.(players, matchRules)
     },
     [sequencer, clearTransients],
   )
 
   const applyRemoteStart = useCallback(
-    (players: PlayerSetup[]) => {
+    (players: PlayerSetup[], rules?: unknown) => {
+      const matchRules = asLudoRules(rules)
       sequencer.rebase(0)
       clearTransients()
-      dispatch({ type: 'START_GAME', players })
+      setHistory([])
+      dispatch({ type: 'START_GAME', players, rules: matchRules })
+      setMatchLog({ players: players.map((p) => ({ ...p })), rules: matchRules, events: [] })
     },
     [sequencer, clearTransients],
   )
@@ -357,6 +388,8 @@ export function useLudo({ controlsPlayer = 'all', hooks }: UseLudoOptions = {}) 
       sequencer.rebase(snapshot.turnCount)
       clearTransients()
       dispatch({ type: 'LOAD_SNAPSHOT', ...snapshot })
+      // Joined (or repaired) mid-match: the early turns are unknowable.
+      setMatchLog(null)
     },
     [sequencer, clearTransients],
   )
@@ -388,10 +421,40 @@ export function useLudo({ controlsPlayer = 'all', hooks }: UseLudoOptions = {}) 
   const reset = useCallback(() => {
     sequencer.rebase(0)
     clearTransients()
+    setHistory([])
+    setMatchLog(null)
     dispatch({ type: 'RESET' })
   }, [sequencer, clearTransients])
 
   const applyRemoteReset = reset
+
+  /**
+   * Local pass-and-play undo: rewind to the last pre-roll state where a HUMAN
+   * was about to act (skipping bot turns, which would instantly replay).
+   * Online play never records history, so this is inert there.
+   */
+  const undo = useCallback(() => {
+    if (controlsPlayer !== 'all') return
+    const snap = stateRef.current
+    if (snap.phase !== 'idle' && snap.phase !== 'selecting') return
+    setHistory((prev) => {
+      let i = prev.length - 1
+      while (i >= 0 && prev[i].players[prev[i].currentPlayerIndex]?.isBot) i--
+      if (i < 0) return prev
+      const target = prev[i]
+      sequencer.rebase(target.turnCount)
+      clearTransients()
+      dispatch({ type: 'RESTORE', state: target })
+      // Rewind the recap/replay log to match (events are 1:1 with commits).
+      setMatchLog((log) => log && { ...log, events: log.events.slice(0, target.turnCount) })
+      return prev.slice(0, i)
+    })
+  }, [controlsPlayer, sequencer, clearTransients])
+
+  const canUndo =
+    controlsPlayer === 'all' &&
+    (state.phase === 'idle' || state.phase === 'selecting') &&
+    history.some((h) => !h.players[h.currentPlayerIndex]?.isBot)
 
   const currentPlayer = state.players[state.currentPlayerIndex] ?? null
   const winner = state.winnerId != null ? (state.players[state.winnerId] ?? null) : null
@@ -407,6 +470,7 @@ export function useLudo({ controlsPlayer = 'all', hooks }: UseLudoOptions = {}) 
     winner,
     standings,
     activeMove,
+    matchLog,
     extraTurnFlash: extraTurnFlash.flash,
     skipFlash: skipFlash.flash,
     selectableMoves,
@@ -416,8 +480,10 @@ export function useLudo({ controlsPlayer = 'all', hooks }: UseLudoOptions = {}) 
     controlsPlayer,
     isMyTurn,
     canRoll,
+    canUndo,
     roll,
     selectToken,
+    undo,
     decide,
     startGame,
     reset,

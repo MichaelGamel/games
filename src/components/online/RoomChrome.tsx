@@ -5,8 +5,11 @@
  * both `OnlineRoom` and `LudoOnlineRoom` render the identical lobby without
  * duplicating it (DRY).
  */
+import { useState } from 'react'
+import type { ReactNode } from 'react'
 import { AnimatePresence, m } from 'motion/react'
-import { MAX_PLAYERS, MIN_PLAYERS, reasonText, type RejectReason } from '../../net/roster'
+import { useTranslation } from 'react-i18next'
+import { MAX_PLAYERS, MIN_PLAYERS, type RejectReason } from '../../net/roster'
 import type { RoomMember, RoomStatus, Role } from '../../net/types'
 import { cn } from '../../lib/cn'
 
@@ -41,6 +44,7 @@ interface JoinRequestsProps {
 
 /** Host-only prompt: incoming requests to join the live match. */
 export function JoinRequests({ requests, canAccept, onAccept, onReject }: JoinRequestsProps) {
+  const { t } = useTranslation('online')
   return (
     <div className="fixed inset-x-0 top-4 z-50 flex flex-col items-center gap-2 px-4">
       <AnimatePresence>
@@ -54,7 +58,7 @@ export function JoinRequests({ requests, canAccept, onAccept, onReject }: JoinRe
             role="alert"
           >
             <p className="text-xs font-semibold uppercase tracking-wide text-white/45">
-              Wants to join
+              {t('joinRequests.wantsToJoin')}
             </p>
             <div className="mt-2 flex items-center gap-3">
               <span
@@ -75,19 +79,19 @@ export function JoinRequests({ requests, canAccept, onAccept, onReject }: JoinRe
                   canAccept ? 'hover:brightness-110' : 'cursor-not-allowed opacity-50',
                 )}
               >
-                Accept
+                {t('joinRequests.accept')}
               </button>
               <button
                 type="button"
                 onClick={() => onReject(member)}
                 className="flex-1 rounded-lg bg-white/10 px-4 py-2 text-sm font-bold text-white/80 ring-1 ring-white/15 transition hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
               >
-                Reject
+                {t('joinRequests.reject')}
               </button>
             </div>
             {!canAccept && (
               <p className="mt-2 text-center text-xs text-white/45">
-                You can let players in between turns.
+                {t('joinRequests.betweenTurns')}
               </p>
             )}
           </m.div>
@@ -110,6 +114,14 @@ export interface WaitingRoomProps {
   /** A match is already running and we are waiting for the host to let us in. */
   pendingApproval: boolean
   canStart: boolean
+  /** Seats this game supports (display only; default 4). */
+  maxPlayers?: number
+  /** Host-only: the game's rule controls, rendered above the Start button. */
+  settings?: ReactNode
+  /** Offered on a full room: watch the match without a seat. */
+  onSpectate?: () => void
+  /** True once this client asked to spectate and is waiting for the state. */
+  spectatePending?: boolean
   onStart: () => void
   onLeave: () => void
 }
@@ -125,11 +137,30 @@ export function WaitingRoom({
   declined,
   pendingApproval,
   canStart,
+  maxPlayers = MAX_PLAYERS,
+  settings,
+  onSpectate,
+  spectatePending,
   onStart,
   onLeave,
 }: WaitingRoomProps) {
+  const { t } = useTranslation(['online', 'common'])
   const copyCode = () => {
     navigator.clipboard?.writeText(code).catch(() => {})
+  }
+
+  // One-tap invite: a deep link that opens this game's lobby with the code
+  // pre-filled on the Join tab (`?room=CODE`, handled by each game's App).
+  const [linkCopied, setLinkCopied] = useState(false)
+  const copyInviteLink = () => {
+    const url = `${window.location.origin}${window.location.pathname}?room=${code}`
+    navigator.clipboard
+      ?.writeText(url)
+      .then(() => {
+        setLinkCopied(true)
+        setTimeout(() => setLinkCopied(false), 2000)
+      })
+      .catch(() => {})
   }
 
   return (
@@ -145,53 +176,64 @@ export function WaitingRoom({
         onClick={onLeave}
         className="absolute left-4 top-4 rounded-lg px-3 py-1.5 text-sm text-white/70 ring-1 ring-white/15 transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
       >
-        ← Leave
+        ← {t('online:waiting.leave')}
       </button>
 
       <div className="w-full max-w-md rounded-2xl bg-white/5 p-8 text-center ring-1 ring-white/10 backdrop-blur">
         {status === 'error' ? (
           <>
             <p className="text-2xl">⚠️</p>
-            <h2 className="mt-3 text-xl font-bold text-white">Couldn't connect</h2>
-            <p className="mt-2 text-sm text-white/60">
-              Online play isn't configured. Add your Supabase keys and redeploy, or run locally in
-              dev test mode.
-            </p>
+            <h2 className="mt-3 text-xl font-bold text-white">{t('online:waiting.connectErrorTitle')}</h2>
+            <p className="mt-2 text-sm text-white/60">{t('online:waiting.connectErrorBody')}</p>
           </>
+        ) : spectatePending ? (
+          <SpectatePendingCard onCancel={onLeave} />
         ) : declined ? (
           <DeclinedCard onBack={onLeave} />
         ) : rejection ? (
-          <RejectionCard reason={rejection} onBack={onLeave} />
+          <RejectionCard
+            reason={rejection}
+            onBack={onLeave}
+            onSpectate={rejection === 'full' ? onSpectate : undefined}
+          />
         ) : pendingApproval ? (
           <PendingCard onCancel={onLeave} />
         ) : (
           <>
             {role === 'host' ? (
               <>
-                <h2 className="text-xl font-bold text-white">Share this code</h2>
-                <p className="mt-1 text-sm text-white/60">
-                  Friends enter it on the “Join room” screen.
-                </p>
+                <h2 className="text-xl font-bold text-white">{t('online:waiting.shareCode')}</h2>
+                <p className="mt-1 text-sm text-white/60">{t('online:waiting.shareHint')}</p>
                 <button
                   type="button"
                   onClick={copyCode}
                   className="mx-auto mt-4 flex items-center gap-3 rounded-xl bg-night-900/60 px-6 py-3 font-mono text-4xl tracking-[0.3em] text-white ring-1 ring-white/15 transition hover:bg-night-900/80"
-                  aria-label={`Room code ${code}, click to copy`}
+                  aria-label={t('online:waiting.codeAria', { code })}
                 >
                   {code}
                   <span className="text-base" aria-hidden="true">
                     📋
                   </span>
                 </button>
+                <button
+                  type="button"
+                  onClick={copyInviteLink}
+                  className="mx-auto mt-3 flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-white/70 ring-1 ring-white/15 transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+                >
+                  <span aria-hidden="true">🔗</span>
+                  {linkCopied ? t('online:waiting.linkCopied') : t('online:waiting.copyInvite')}
+                </button>
               </>
             ) : (
               <>
-                <h2 className="text-xl font-bold text-white">Joined room</h2>
+                <h2 className="text-xl font-bold text-white">{t('online:waiting.joinedRoom')}</h2>
                 <p className="mt-2 font-mono text-3xl tracking-[0.3em] text-white">{code}</p>
               </>
             )}
 
-            <Roster seats={seats} myClientId={myClientId} />
+            <Roster seats={seats} myClientId={myClientId} maxPlayers={maxPlayers} />
+
+            {settings && <div className="mt-5">{settings}</div>}
 
             {role === 'host' ? (
               <m.button
@@ -206,16 +248,17 @@ export function WaitingRoom({
                   !canStart && 'cursor-not-allowed opacity-50',
                 )}
               >
-                {canStart ? 'Start Game ▶' : `Waiting for players… (need ${MIN_PLAYERS}+)`}
+                {canStart
+                  ? t('common:actions.startGame')
+                  : t('online:waiting.waitingForPlayers', { min: MIN_PLAYERS })}
               </m.button>
             ) : (
-              <p className="mt-5 text-sm text-white/70">Waiting for the host to start…</p>
+              <p className="mt-5 text-sm text-white/70">{t('online:waiting.waitingForHost')}</p>
             )}
 
             {testMode && (
               <p className="mt-4 rounded-lg bg-white/5 px-3 py-2 text-xs text-white/45">
-                Test mode: works across tabs in this browser only. Add Supabase keys for real
-                cross-computer play.
+                {t('online:waiting.testModeHint')}
               </p>
             )}
           </>
@@ -225,13 +268,22 @@ export function WaitingRoom({
   )
 }
 
-function Roster({ seats, myClientId }: { seats: RoomMember[]; myClientId: string }) {
+function Roster({
+  seats,
+  myClientId,
+  maxPlayers,
+}: {
+  seats: RoomMember[]
+  myClientId: string
+  maxPlayers: number
+}) {
+  const { t } = useTranslation(['online', 'common'])
   return (
     <div className="mt-6">
       <p className="mb-2 text-xs uppercase tracking-wide text-white/45">
-        Players {seats.length}/{MAX_PLAYERS}
+        {t('online:waiting.playersCount', { count: seats.length, max: maxPlayers })}
       </p>
-      <ul className="flex flex-col gap-2" aria-label="Players in room">
+      <ul className="flex flex-col gap-2" aria-label={t('online:waiting.playersAria')}>
         {seats.map((m) => (
           <li
             key={m.clientId}
@@ -245,10 +297,14 @@ function Roster({ seats, myClientId }: { seats: RoomMember[]; myClientId: string
             <span className="truncate text-sm font-semibold text-white">
               {m.name}
               {m.clientId === myClientId && (
-                <span className="ml-1 text-xs font-normal text-white/50">(you)</span>
+                <span className="ms-1 text-xs font-normal text-white/50">
+                  {t('common:game.you')}
+                </span>
               )}
               {m.role === 'host' && (
-                <span className="ml-1 text-xs font-normal text-amber-300/80">host</span>
+                <span className="ms-1 text-xs font-normal text-amber-300/80">
+                  {t('online:waiting.host')}
+                </span>
               )}
             </span>
           </li>
@@ -258,19 +314,73 @@ function Roster({ seats, myClientId }: { seats: RoomMember[]; myClientId: string
   )
 }
 
-function RejectionCard({ reason, onBack }: { reason: RejectReason; onBack: () => void }) {
-  const { title, detail } = reasonText(reason)
+/** Translation keys per rejection reason. */
+const REJECT_KEYS = {
+  full: { title: 'reject.fullTitle', detail: 'reject.fullDetail' },
+  'name-taken': { title: 'reject.nameTakenTitle', detail: 'reject.nameTakenDetail' },
+  'color-taken': { title: 'reject.colorTakenTitle', detail: 'reject.colorTakenDetail' },
+} as const
+
+function RejectionCard({
+  reason,
+  onBack,
+  onSpectate,
+}: {
+  reason: RejectReason
+  onBack: () => void
+  /** Offered when the room is merely full — you can still watch. */
+  onSpectate?: () => void
+}) {
+  const { t } = useTranslation('online')
+  const keys = REJECT_KEYS[reason]
   return (
     <>
       <p className="text-2xl">🚫</p>
-      <h2 className="mt-3 text-xl font-bold text-white">{title}</h2>
-      <p className="mt-2 text-sm text-white/60">{detail}</p>
+      <h2 className="mt-3 text-xl font-bold text-white">{t(keys.title)}</h2>
+      <p className="mt-2 text-sm text-white/60">{t(keys.detail)}</p>
+      <div className="mx-auto mt-5 flex flex-col gap-2">
+        {onSpectate && (
+          <button
+            type="button"
+            onClick={onSpectate}
+            className="rounded-xl bg-linear-to-r from-sky-500 to-sky-400 px-6 py-2.5 font-bold text-white shadow-lg ring-1 ring-white/20 transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+          >
+            {t('reject.watchInstead')}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onBack}
+          className="rounded-xl bg-linear-to-r from-grape to-grape-light px-6 py-2.5 font-bold text-white shadow-lg ring-1 ring-white/20 transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+        >
+          {t('reject.backToChange')}
+        </button>
+      </div>
+    </>
+  )
+}
+
+/** Spectator: asked to watch and waiting for a seated player to send state. */
+function SpectatePendingCard({ onCancel }: { onCancel: () => void }) {
+  const { t } = useTranslation(['online', 'common'])
+  return (
+    <>
+      <m.p
+        className="text-2xl"
+        animate={{ scale: [1, 1.15, 1] }}
+        transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
+        aria-hidden="true"
+      >
+        👀
+      </m.p>
+      <h2 className="mt-3 text-xl font-bold text-white">{t('online:spectate.title')}</h2>
+      <p className="mt-2 text-sm text-white/60">{t('online:spectate.body')}</p>
       <button
         type="button"
-        onClick={onBack}
-        className="mx-auto mt-5 rounded-xl bg-linear-to-r from-grape to-grape-light px-6 py-2.5 font-bold text-white shadow-lg ring-1 ring-white/20 transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+        onClick={onCancel}
+        className="mx-auto mt-5 rounded-xl bg-white/10 px-6 py-2.5 font-bold text-white/80 ring-1 ring-white/15 transition hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
       >
-        ← Back to change
+        {t('common:actions.cancel')}
       </button>
     </>
   )
@@ -278,6 +388,7 @@ function RejectionCard({ reason, onBack }: { reason: RejectReason; onBack: () =>
 
 /** Late joiner: a match is running and the host has been asked to let us in. */
 function PendingCard({ onCancel }: { onCancel: () => void }) {
+  const { t } = useTranslation(['online', 'common'])
   return (
     <>
       <m.p
@@ -288,16 +399,14 @@ function PendingCard({ onCancel }: { onCancel: () => void }) {
       >
         ✋
       </m.p>
-      <h2 className="mt-3 text-xl font-bold text-white">Asking the host…</h2>
-      <p className="mt-2 text-sm text-white/60">
-        This match is already in progress. The host has been asked to let you in — hang tight.
-      </p>
+      <h2 className="mt-3 text-xl font-bold text-white">{t('online:pending.title')}</h2>
+      <p className="mt-2 text-sm text-white/60">{t('online:pending.body')}</p>
       <button
         type="button"
         onClick={onCancel}
         className="mx-auto mt-5 rounded-xl bg-white/10 px-6 py-2.5 font-bold text-white/80 ring-1 ring-white/15 transition hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
       >
-        Cancel
+        {t('common:actions.cancel')}
       </button>
     </>
   )
@@ -305,19 +414,18 @@ function PendingCard({ onCancel }: { onCancel: () => void }) {
 
 /** Late joiner: the host declined our request. */
 function DeclinedCard({ onBack }: { onBack: () => void }) {
+  const { t } = useTranslation('online')
   return (
     <>
       <p className="text-2xl">🚫</p>
-      <h2 className="mt-3 text-xl font-bold text-white">Not this time</h2>
-      <p className="mt-2 text-sm text-white/60">
-        The host declined your request to join. You can try a different room.
-      </p>
+      <h2 className="mt-3 text-xl font-bold text-white">{t('reject.declinedTitle')}</h2>
+      <p className="mt-2 text-sm text-white/60">{t('reject.declinedBody')}</p>
       <button
         type="button"
         onClick={onBack}
         className="mx-auto mt-5 rounded-xl bg-linear-to-r from-grape to-grape-light px-6 py-2.5 font-bold text-white shadow-lg ring-1 ring-white/20 transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
       >
-        ← Back to lobby
+        {t('reject.backToLobby')}
       </button>
     </>
   )

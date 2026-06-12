@@ -1,5 +1,6 @@
 import { m } from 'motion/react'
-import { placeLabel, placeMedal, type PodiumPlayer } from '../lib/place'
+import { useTranslation } from 'react-i18next'
+import { placeKey, placeMedal, type PodiumPlayer } from '../lib/place'
 import { Confetti } from './Confetti'
 
 interface CelebrationOverlayProps {
@@ -11,8 +12,8 @@ interface CelebrationOverlayProps {
   canDecide: boolean
   /** Who everyone else is waiting on (shown when `canDecide` is false). */
   waitingFor: string
-  /** What the finisher just achieved (defaults to the Snakes phrasing). */
-  message?: string
+  /** What the finisher just achieved (the calling game supplies the copy). */
+  message: string
   onContinue: () => void
   onEnd: () => void
 }
@@ -26,10 +27,11 @@ export function CelebrationOverlay({
   rank,
   canDecide,
   waitingFor,
-  message = 'made it to 100! 🎉',
+  message,
   onContinue,
   onEnd,
 }: CelebrationOverlayProps) {
+  const { t } = useTranslation(['common'])
   return (
     <m.div
       className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-4 backdrop-blur-sm"
@@ -38,7 +40,7 @@ export function CelebrationOverlay({
       exit={{ opacity: 0 }}
       role="dialog"
       aria-modal="true"
-      aria-label={`${player.name} finished ${placeLabel(rank)}`}
+      aria-label={`${player.name} — ${t(placeKey(rank))}`}
     >
       <Confetti count={60} />
 
@@ -59,12 +61,12 @@ export function CelebrationOverlay({
         </m.div>
 
         <h2 className="mt-4 text-3xl font-bold text-white">
-          {placeLabel(rank)} place!
+          {t('overlay.celebrationTitle', { place: t(placeKey(rank)) })}
         </h2>
         <p className="mt-2 text-xl font-semibold" style={{ color: player.color }}>
           {player.name} {message}
         </p>
-        <p className="mt-2 text-sm text-white/60">The race for the next spot is still on.</p>
+        <p className="mt-2 text-sm text-white/60">{t('overlay.celebrationRace')}</p>
 
         {canDecide ? (
           <div className="mt-7 flex flex-col gap-3">
@@ -75,19 +77,19 @@ export function CelebrationOverlay({
               whileTap={{ scale: 0.96 }}
               className="rounded-xl bg-linear-to-r from-emerald-500 to-emerald-400 px-6 py-3 text-lg font-bold text-white shadow-lg ring-1 ring-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
             >
-              Keep Playing ▶
+              {t('overlay.keepPlaying')}
             </m.button>
             <button
               type="button"
               onClick={onEnd}
               className="rounded-xl px-6 py-2.5 font-semibold text-white/80 ring-1 ring-white/15 transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
             >
-              End Game — Show Standings
+              {t('overlay.endGame')}
             </button>
           </div>
         ) : (
           <p className="mt-7 animate-pulse text-sm font-semibold text-white/70" role="status">
-            Waiting for {waitingFor} to decide…
+            {t('overlay.waitingForDecision', { name: waitingFor })}
           </p>
         )}
       </m.div>

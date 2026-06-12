@@ -6,6 +6,8 @@ interface SnakeProps {
   /** Head cell (the higher number) and tail cell (the lower number). */
   head: number
   tail: number
+  /** Board side, for mapping cells to percentages. */
+  size: number
   index: number
   /**
    * Which visual layer to emit. SVG has no z-index — only document order — so
@@ -18,11 +20,11 @@ interface SnakeProps {
 }
 
 /** A single snake: tapering d3 body, themed markings, a defined head + eyes. */
-export function Snake({ head, tail, index, layer }: SnakeProps) {
+export function Snake({ head, tail, size, index, layer }: SnakeProps) {
   const theme = themeFor(index)
   const geom = useMemo(
-    () => buildSnakeGeometry(cellToPercent(head), cellToPercent(tail), head),
-    [head, tail],
+    () => buildSnakeGeometry(cellToPercent(head, size), cellToPercent(tail, size), head),
+    [head, tail, size],
   )
 
   const gradId = `snake-grad-${index}`

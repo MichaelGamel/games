@@ -1,5 +1,7 @@
 import { lazy, Suspense, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { AnimatePresence } from 'motion/react'
+import { useTranslation } from 'react-i18next'
 import { Backdrop } from '../Backdrop'
 import { useDocumentMeta } from '../../lib/useDocumentMeta'
 import { isSupabaseConfigured } from '../../net/config'
@@ -23,11 +25,15 @@ const onlineEnabled = isSupabaseConfigured || import.meta.env.DEV
  * same `useLudo` core; online never loads on the menu or local play.
  */
 export function LudoApp() {
-  const [mode, setMode] = useState<Mode>('menu')
+  // A shared invite link (`/ludo?room=CODE`) jumps straight into the online
+  // lobby with the code pre-filled. Consumed once on mount.
+  const [searchParams] = useSearchParams()
+  const [initialRoomCode] = useState(() => searchParams.get('room')?.toUpperCase() ?? undefined)
+  const [mode, setMode] = useState<Mode>(initialRoomCode && onlineEnabled ? 'online' : 'menu')
+  const { t } = useTranslation(['ludo', 'common'])
   useDocumentMeta({
-    title: "Ludo — Robin's Games",
-    description:
-      "Ludo on Robin's Games — race all four tokens home, capture opponents and roll a six for an extra turn. Play locally or online with friends in real time.",
+    title: t('ludo:metaTitle'),
+    description: t('ludo:metaDescription'),
   })
 
   return (
@@ -47,11 +53,11 @@ export function LudoApp() {
             key="online"
             fallback={
               <div className="relative z-10 grid min-h-screen place-items-center text-white/70">
-                Loading…
+                {t('common:loading')}
               </div>
             }
           >
-            <LudoOnlineGame onExit={() => setMode('menu')} />
+            <LudoOnlineGame onExit={() => setMode('menu')} initialRoomCode={initialRoomCode} />
           </Suspense>
         )}
       </AnimatePresence>

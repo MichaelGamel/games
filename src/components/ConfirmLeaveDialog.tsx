@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { AnimatePresence, m } from 'motion/react'
+import { useTranslation } from 'react-i18next'
 
 interface ConfirmLeaveDialogProps {
   open: boolean
@@ -16,6 +17,7 @@ interface ConfirmLeaveDialogProps {
  * piece reused by every online room (Snakes, Ludo, …).
  */
 export function ConfirmLeaveDialog({ open, onConfirm, onCancel }: ConfirmLeaveDialogProps) {
+  const { t } = useTranslation()
   const stayRef = useRef<HTMLButtonElement>(null)
 
   // Escape always means "stay"; focus the safe choice when the dialog opens.
@@ -65,10 +67,10 @@ export function ConfirmLeaveDialog({ open, onConfirm, onCancel }: ConfirmLeaveDi
             </m.div>
 
             <h2 id="leave-confirm-title" className="mt-4 text-2xl font-bold text-white">
-              Leaving so soon?
+              {t('confirmLeave.title')}
             </h2>
             <p id="leave-confirm-body" className="mt-2 text-base text-white/70">
-              We’ll be sad to see you go! Are you sure you want to leave the game?
+              {t('confirmLeave.body')}
             </p>
 
             <div className="mt-7 flex flex-col gap-3">
@@ -80,14 +82,14 @@ export function ConfirmLeaveDialog({ open, onConfirm, onCancel }: ConfirmLeaveDi
                 whileTap={{ scale: 0.96 }}
                 className="rounded-xl bg-linear-to-r from-grape to-grape-light px-6 py-3 text-lg font-bold text-white shadow-lg ring-1 ring-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
               >
-                Keep Playing 🎲
+                {t('confirmLeave.stay')}
               </m.button>
               <button
                 type="button"
                 onClick={onConfirm}
                 className="rounded-xl px-6 py-2.5 font-semibold text-white/70 ring-1 ring-white/15 transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
               >
-                Leave Game
+                {t('confirmLeave.leave')}
               </button>
             </div>
           </m.div>

@@ -1,20 +1,27 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { LazyMotion, domAnimation } from 'motion/react'
+import { useTranslation } from 'react-i18next'
 import App from './App'
 import { HomeHub } from './components/HomeHub'
 import { Backdrop } from './components/Backdrop'
 
-// Ludo (and everything it will pull in) loads only when /ludo is visited, so the
-// hub and Snakes initial bundles never pay for it.
+// Each game (and everything it pulls in) loads only when its route is visited,
+// so the hub and Snakes initial bundles never pay for the others.
 const LudoApp = lazy(() =>
   import('./components/ludo/LudoApp').then((m) => ({ default: m.LudoApp })),
 )
+const FourApp = lazy(() =>
+  import('./components/four/FourApp').then((m) => ({ default: m.FourApp })),
+)
 
 function RouteFallback() {
+  const { t } = useTranslation()
   return (
     <Backdrop>
-      <div className="relative z-10 grid min-h-screen place-items-center text-white/70">Loading…</div>
+      <div className="relative z-10 grid min-h-screen place-items-center text-white/70">
+        {t('loading')}
+      </div>
     </Backdrop>
   )
 }
@@ -41,6 +48,14 @@ export function Root() {
             element={
               <Suspense fallback={<RouteFallback />}>
                 <LudoApp />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/four"
+            element={
+              <Suspense fallback={<RouteFallback />}>
+                <FourApp />
               </Suspense>
             }
           />

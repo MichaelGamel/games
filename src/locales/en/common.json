@@ -1,0 +1,96 @@
+{
+  "appName": "Robin's Games",
+  "hub": {
+    "title": "Robin's Games",
+    "subtitle": "Pick a game — pass-and-play on one screen or online with friends.",
+    "play": "Play",
+    "playGame": "Play {{title}}",
+    "hallOfFame": "Hall of Fame",
+    "winsOf_one": "{{wins}} win / {{games}}",
+    "winsOf_other": "{{wins}} wins / {{games}}",
+    "streak": "{{count}} wins in a row",
+    "metaTitle": "Robin's Games — Snakes & Ladders, Ludo, Connect Four",
+    "metaDescription": "Robin's Games is a hub of polished, animated board games for 2–4 players. Play Snakes & Ladders, Ludo or Connect Four — pass-and-play on one screen or online with friends in real time."
+  },
+  "menu": {
+    "back": "Menu",
+    "passAndPlay": "Pass & Play",
+    "playOnline": "Play Online",
+    "onlineDisabled": "Add Supabase keys to enable cross-computer play (see README)."
+  },
+  "actions": {
+    "startGame": "Start Game ▶",
+    "newGame": "New Game",
+    "playAgain": "Play Again",
+    "leave": "Leave",
+    "cancel": "Cancel",
+    "close": "Close",
+    "undo": "Undo",
+    "undoAria": "Undo the last turn",
+    "sound": "Sound",
+    "muted": "Muted",
+    "muteAria": "Mute sound effects",
+    "unmuteAria": "Unmute sound effects",
+    "watchReplay": "🎬 Watch Replay",
+    "rollDice": "Roll Dice"
+  },
+  "setup": {
+    "player": "Player {{n}}",
+    "computer": "Computer {{n}}",
+    "tokenColor": "Token color",
+    "discColor": "Disc color",
+    "playerType": "Player type",
+    "human": "🧑 Human",
+    "bot": "🤖 Computer",
+    "botEasy": "😌 Easy",
+    "botSmart": "🧠 Smart",
+    "addPlayer": "＋ Add player",
+    "removePlayer": "Remove player {{n}}",
+    "gameRules": "Game rules",
+    "players": "Players"
+  },
+  "game": {
+    "you": "(you)",
+    "yourTurn": "Your turn",
+    "turn": "turn",
+    "start": "Start",
+    "rolling": "Rolling…",
+    "moving": "Moving…",
+    "celebratingLabel": "Celebrating… 🎉",
+    "gameOver": "Game Over",
+    "waiting": "Waiting…",
+    "opponentsTurn": "{{name}}'s turn",
+    "botPlayer": "computer player",
+    "holdingShield": "holding a shield"
+  },
+  "place": {
+    "p1": "1st",
+    "p2": "2nd",
+    "p3": "3rd",
+    "p4": "4th"
+  },
+  "overlay": {
+    "winnerTitle": "We have a winner!",
+    "standingsTitle": "Final standings!",
+    "wins": "{{name}} wins! 🎉",
+    "standingsAria": "Final standings",
+    "winnerAria": "{{name}} wins",
+    "newPlayers": "New Players",
+    "matchRecap": "Match recap",
+    "celebrationTitle": "{{place}} place!",
+    "celebrationRace": "The race for the next spot is still on.",
+    "keepPlaying": "Keep Playing ▶",
+    "endGame": "End Game — Show Standings",
+    "waitingForDecision": "Waiting for {{name}} to decide…",
+    "drawTitle": "It's a draw!",
+    "drawBody": "The board filled up with nobody connecting four.",
+    "drawAria": "It's a draw"
+  },
+  "confirmLeave": {
+    "title": "Leaving so soon?",
+    "body": "We'll be sad to see you go! Are you sure you want to leave the game?",
+    "stay": "Keep Playing 🎲",
+    "leave": "Leave Game"
+  },
+  "loading": "Loading…"
+}

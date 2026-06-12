@@ -4,7 +4,9 @@
  * orchestration lives in the useSnakesAndLadders hook, keeping this fully
  * deterministic and trivial to reason about.
  */
-import type { DieValue, GameState, Player, TurnResolution } from './types'
+import { DEFAULT_SNAKES_RULES } from './config'
+import { layoutForRules } from './boardGen'
+import type { DieValue, GameState, Player, SnakesRules, TurnResolution } from './types'
 
 export interface PlayerSetup {
   name: string
@@ -13,19 +15,21 @@ export interface PlayerSetup {
   isBot?: boolean
 }
 
-/** A seated player as captured in a running-match snapshot (adds board position). */
+/** A seated player as captured in a running-match snapshot (adds board state). */
 export interface PlayerSnapshot extends PlayerSetup {
   position: number
+  shield: boolean
 }
 
 export type GameAction =
-  | { type: 'START_GAME'; players: PlayerSetup[] }
+  | { type: 'START_GAME'; players: PlayerSetup[]; rules?: SnakesRules }
   | { type: 'ADD_PLAYER'; player: PlayerSetup }
   | {
       type: 'LOAD_SNAPSHOT'
       players: PlayerSnapshot[]
+      rules: SnakesRules
       currentPlayerIndex: number
-      lastRoll: DieValue | null
+      lastRoll: number | null
       finishedOrder: number[]
       /** True when the snapshot was taken mid-celebration (awaiting host). */
       awaitingDecision: boolean
@@ -33,7 +37,7 @@ export type GameAction =
       ended: boolean
       turnCount: number
     }
-  | { type: 'BEGIN_ROLL'; roll: DieValue }
+  | { type: 'BEGIN_ROLL'; dice: DieValue[] }
   | { type: 'BEGIN_MOVE' }
   | { type: 'COMMIT_TURN'; resolution: TurnResolution }
   // The current player left the room: hand the turn to the next active player.
@@ -48,7 +52,10 @@ export const initialState: GameState = {
   players: [],
   currentPlayerIndex: 0,
   phase: 'setup',
+  rules: { ...DEFAULT_SNAKES_RULES },
+  board: layoutForRules(DEFAULT_SNAKES_RULES),
   lastRoll: null,
+  lastDice: [],
   winnerId: null,
   winReason: null,
   finishedOrder: [],
@@ -69,14 +76,16 @@ function nextActiveIndex(state: GameState, from: number): number {
 export function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
     case 'START_GAME': {
+      const rules = action.rules ?? { ...DEFAULT_SNAKES_RULES }
       const players: Player[] = action.players.map((p, id) => ({
         id,
         name: p.name,
         color: p.color,
         position: 0,
+        shield: false,
         isBot: p.isBot ?? false,
       }))
-      return { ...initialState, players, phase: 'idle' }
+      return { ...initialState, players, rules, board: layoutForRules(rules), phase: 'idle' }
     }
 
     case 'ADD_PLAYER': {
@@ -88,6 +97,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         name: action.player.name,
         color: action.player.color,
         position: 0,
+        shield: false,
         // Late joiners are online-only humans; bots never go over the wire.
         isBot: false,
       }
@@ -102,6 +112,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         name: p.name,
         color: p.color,
         position: p.position,
+        shield: p.shield,
         // Snapshots arrive over the network (online only); no bots there.
         isBot: false,
       }))
@@ -109,7 +120,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         players,
         currentPlayerIndex: action.currentPlayerIndex,
         phase: action.ended ? 'won' : action.awaitingDecision ? 'celebrating' : 'idle',
+        rules: action.rules,
+        board: layoutForRules(action.rules),
         lastRoll: action.lastRoll,
+        lastDice: [], // the individual dice aren't carried; the cube shows its rest face
         winnerId: action.finishedOrder[0] ?? null,
         winReason: action.ended ? 'goal' : null,
         finishedOrder: action.finishedOrder,
@@ -118,16 +132,33 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'BEGIN_ROLL':
-      return { ...state, phase: 'rolling', lastRoll: action.roll }
+      return {
+        ...state,
+        phase: 'rolling',
+        lastDice: action.dice,
+        lastRoll: action.dice.reduce((sum, d) => sum + d, 0),
+      }
 
     case 'BEGIN_MOVE':
       return { ...state, phase: 'moving' }
 
     case 'COMMIT_TURN': {
       const { resolution } = action
-      const players = state.players.map((p) =>
-        p.id === state.currentPlayerIndex ? { ...p, position: resolution.finalPos } : p,
-      )
+      const players = state.players.map((p) => {
+        if (p.id === state.currentPlayerIndex) {
+          return {
+            ...p,
+            position: resolution.finalPos,
+            // A pickup arms the shield; spending it on a snake disarms it.
+            shield: resolution.shieldGained ? true : resolution.shieldUsed ? false : p.shield,
+          }
+        }
+        // Swap special: the overtaken leader lands on our pre-swap cell.
+        if (resolution.swapWith === p.id && resolution.swapPartnerPos != null) {
+          return { ...p, position: resolution.swapPartnerPos }
+        }
+        return p
+      })
       const turnCount = state.turnCount + 1
 
       if (resolution.isWin) {

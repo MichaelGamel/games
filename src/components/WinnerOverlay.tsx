@@ -1,5 +1,7 @@
+import type { ReactNode } from 'react'
 import { m } from 'motion/react'
-import { placeLabel, placeMedal, type PodiumPlayer } from '../lib/place'
+import { useTranslation } from 'react-i18next'
+import { placeKey, placeMedal, type PodiumPlayer } from '../lib/place'
 import { Confetti } from './Confetti'
 
 interface WinnerOverlayProps {
@@ -7,6 +9,10 @@ interface WinnerOverlayProps {
   standings: PodiumPlayer[]
   /** Extra context under the winner line (e.g. won because everyone left). */
   subtitle?: string
+  /** The match-recap stats panel (when the full match was witnessed). */
+  recap?: ReactNode
+  /** Offered when the full match log exists: watch the whole game again. */
+  onReplay?: () => void
   /** Omit to hide the Play Again button (e.g. no opponents left). */
   onPlayAgain?: () => void
   onSecondary: () => void
@@ -21,10 +27,13 @@ interface WinnerOverlayProps {
 export function WinnerOverlay({
   standings,
   subtitle,
+  recap,
+  onReplay,
   onPlayAgain,
   onSecondary,
-  secondaryLabel = 'New Players',
+  secondaryLabel,
 }: WinnerOverlayProps) {
+  const { t } = useTranslation(['common'])
   const winner = standings[0]
   const single = standings.length === 1
 
@@ -36,7 +45,9 @@ export function WinnerOverlay({
       exit={{ opacity: 0 }}
       role="dialog"
       aria-modal="true"
-      aria-label={single ? `${winner.name} wins` : 'Final standings'}
+      aria-label={
+        single ? t('overlay.winnerAria', { name: winner.name }) : t('overlay.standingsAria')
+      }
     >
       <Confetti />
 
@@ -57,15 +68,15 @@ export function WinnerOverlay({
         </m.div>
 
         <h2 className="mt-4 text-3xl font-bold text-white">
-          {single ? 'We have a winner!' : 'Final standings!'}
+          {single ? t('overlay.winnerTitle') : t('overlay.standingsTitle')}
         </h2>
 
         {single ? (
           <p className="mt-2 text-xl font-semibold" style={{ color: winner.color }}>
-            {winner.name} wins! 🎉
+            {t('overlay.wins', { name: winner.name })}
           </p>
         ) : (
-          <ol className="mt-5 flex flex-col gap-2" aria-label="Final standings">
+          <ol className="mt-5 flex flex-col gap-2" aria-label={t('overlay.standingsAria')}>
             {standings.map((p, rank) => (
               <m.li
                 key={p.id}
@@ -97,7 +108,7 @@ export function WinnerOverlay({
                   {p.name}
                 </span>
                 <span className="shrink-0 text-sm font-semibold text-white/60">
-                  {placeLabel(rank)}
+                  {t(placeKey(rank))}
                 </span>
               </m.li>
             ))}
@@ -105,6 +116,8 @@ export function WinnerOverlay({
         )}
 
         {subtitle && <p className="mt-2 text-sm text-white/60">{subtitle}</p>}
+
+        {recap}
 
         <div className="mt-7 flex flex-col gap-3">
           {onPlayAgain && (
@@ -115,15 +128,24 @@ export function WinnerOverlay({
               whileTap={{ scale: 0.96 }}
               className="rounded-xl bg-linear-to-r from-grape to-grape-light px-6 py-3 text-lg font-bold text-white shadow-lg ring-1 ring-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
             >
-              Play Again
+              {t('actions.playAgain')}
             </m.button>
+          )}
+          {onReplay && (
+            <button
+              type="button"
+              onClick={onReplay}
+              className="rounded-xl px-6 py-2.5 font-semibold text-white/80 ring-1 ring-white/15 transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+            >
+              {t('actions.watchReplay')}
+            </button>
           )}
           <button
             type="button"
             onClick={onSecondary}
             className="rounded-xl px-6 py-2.5 font-semibold text-white/80 ring-1 ring-white/15 transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
           >
-            {secondaryLabel}
+            {secondaryLabel ?? t('overlay.newPlayers')}
           </button>
         </div>
       </m.div>

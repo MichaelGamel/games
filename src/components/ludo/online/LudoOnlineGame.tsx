@@ -3,8 +3,14 @@ import { OnlineLobby, type LobbyDraft, type RoomParams } from '../../online/Onli
 import { LUDO_COLORS } from '../../../ludo/config'
 import { LudoOnlineRoom } from './LudoOnlineRoom'
 
+interface LudoOnlineGameProps {
+  onExit: () => void
+  /** Room code from a shared invite link — opens the lobby on the Join tab. */
+  initialRoomCode?: string
+}
+
 /** Online Ludo: pick/create a room, then play the match. Mirrors `OnlineGame`. */
-export function LudoOnlineGame({ onExit }: { onExit: () => void }) {
+export function LudoOnlineGame({ onExit, initialRoomCode }: LudoOnlineGameProps) {
   const [params, setParams] = useState<RoomParams | null>(null)
   // Remember the last lobby entries so a bounced-back joiner (name/color taken,
   // room full…) returns with their values preserved.
@@ -15,6 +21,7 @@ export function LudoOnlineGame({ onExit }: { onExit: () => void }) {
       <OnlineLobby
         onBack={onExit}
         initial={draft}
+        initialCode={initialRoomCode}
         colors={LUDO_COLORS}
         onStart={(next, nextDraft) => {
           setDraft(nextDraft)

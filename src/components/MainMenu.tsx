@@ -1,6 +1,8 @@
 import { m } from 'motion/react'
+import { useTranslation } from 'react-i18next'
 import { cn } from '../lib/cn'
 import { BackToHubLink } from './BackToHubLink'
+import { LanguageSwitcher } from './LanguageSwitcher'
 
 interface MainMenuProps {
   onLocal: () => void
@@ -19,6 +21,7 @@ const item = {
 } as const
 
 export function MainMenu({ onLocal, onOnline, onlineEnabled }: MainMenuProps) {
+  const { t } = useTranslation(['snakes', 'common'])
   return (
     <m.div
       key="menu"
@@ -29,6 +32,7 @@ export function MainMenu({ onLocal, onOnline, onlineEnabled }: MainMenuProps) {
       className="relative z-10 flex min-h-screen flex-col items-center justify-center gap-10 px-4 py-10"
     >
       <BackToHubLink />
+      <LanguageSwitcher className="absolute end-4 top-4 z-20" />
 
       <m.header variants={item} className="text-center">
         <m.h1
@@ -36,26 +40,23 @@ export function MainMenu({ onLocal, onOnline, onlineEnabled }: MainMenuProps) {
           animate={{ y: [0, -6, 0] }}
           transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
         >
-          <span aria-hidden="true">🐍</span> Snakes &amp; Ladders{' '}
-          <span aria-hidden="true">🪜</span>
+          <span aria-hidden="true">🐍</span> {t('snakes:title')} <span aria-hidden="true">🪜</span>
         </m.h1>
-        <p className="mt-3 text-white/70">Climb the ladders, dodge the snakes, race to 100.</p>
+        <p className="mt-3 text-white/70">{t('snakes:tagline')}</p>
       </m.header>
 
       <m.div variants={item} className="grid w-full max-w-2xl gap-4 sm:grid-cols-2">
         <MenuCard
           emoji="🎲"
-          title="Pass & Play"
-          subtitle="Two players, one screen. Take turns on the same device."
+          title={t('common:menu.passAndPlay')}
+          subtitle={t('snakes:menu.localSubtitle')}
           onClick={onLocal}
         />
         <MenuCard
           emoji="🌐"
-          title="Play Online"
+          title={t('common:menu.playOnline')}
           subtitle={
-            onlineEnabled
-              ? 'Create or join a room and play with a friend on another computer.'
-              : 'Add Supabase keys to enable cross-computer play (see README).'
+            onlineEnabled ? t('snakes:menu.onlineSubtitle') : t('common:menu.onlineDisabled')
           }
           onClick={onOnline}
           disabled={!onlineEnabled}
