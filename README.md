@@ -1,12 +1,12 @@
 <div align="center">
 
-# 🐍 Snakes &amp; Ladders 🪜
+# 🎲 Robin&apos;s Games
 
-### Roll the dice. Climb the ladders. Dodge the snakes. Race your friends to 100.
+### A hub of polished, animated board games — play on one screen or online.
 
-A polished, heavily-animated take on the classic board game — play **pass-and-play on one screen**
-or **online across computers** in real time. Built with React 19, TypeScript, Tailwind CSS v4, and
-Motion.
+**Robin&apos;s Games** is a multi-game arcade. Pick a game from the hub at `/` and play
+**pass-and-play on one screen** or **online across computers** in real time. Every game lives on its
+own route. Built with React 19, TypeScript, Tailwind CSS v4, React Router, and Motion.
 
 <br />
 
@@ -25,7 +25,20 @@ Motion.
 
 ---
 
-## ✨ Highlights
+## 🎮 Games
+
+| Game | Route | About |
+| --- | --- | --- |
+| 🐍 **Snakes & Ladders** | `/snakes` | Climb the ladders, dodge the snakes, race to 100. |
+| 🎲 **Ludo** | `/ludo` | Race all four tokens home — capture, block, roll a six. *(coming soon)* |
+
+The landing page at `/` is the **Robin&apos;s Games** hub; each game is lazy-loaded on its own route,
+so the hub and Snakes never download Ludo's code (and vice-versa). Deep links work out of the box via
+the Netlify SPA fallback.
+
+---
+
+## ✨ Snakes & Ladders highlights
 
 🎲 **A real 3D dice** — a CSS `preserve-3d` cube that genuinely tumbles in space and settles on the
 rolled face.
@@ -188,6 +201,9 @@ exactly the same cells — frame-independent and lag-tolerant.
 
 ```
 src/
+├─ main.tsx                    # bootstrap: createRoot → <Root/>
+├─ Root.tsx                    # BrowserRouter: / → hub · /snakes → Snakes · /ludo → Ludo (lazy)
+├─ App.tsx                     # Snakes & Ladders shell (the /snakes 3-mode switch)
 ├─ game/          # pure, framework-free, unit-tested logic
 │  ├─ config.ts        # board layout, snakes/ladders, palette, timings (single source of truth)
 │  ├─ board.ts         # boustrophedon cell ⇄ (row,col) mapping
@@ -205,7 +221,13 @@ src/
 │  └─ useRoom.ts               # picks a transport, exposes a tiny room API
 ├─ audio/soundEngine.ts        # Web Audio oscillator effects (no files)
 ├─ components/                 # board/, dice/, online/, panels & overlays
-└─ lib/cn.ts                   # className helper
+│  ├─ HomeHub.tsx              # the Robin's Games landing (data-driven game cards)
+│  ├─ Backdrop.tsx             # shared night/gradient/blob chrome for every route
+│  ├─ BackToHubLink.tsx        # "← Robin's Games" back-affordance
+│  └─ ludo/LudoApp.tsx         # the /ludo route (placeholder today)
+└─ lib/
+   ├─ cn.ts                    # className helper
+   └─ useDocumentMeta.ts       # per-route title + canonical + OG/Twitter SEO
 ```
 
 ---

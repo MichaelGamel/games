@@ -1,7 +1,7 @@
 {
-  "name": "Snakes & Ladders",
-  "short_name": "Snakes & Ladders",
-  "description": "A polished, animated Snakes & Ladders game for 2–4 players. Play pass-and-play on one screen or online in real time.",
+  "name": "Robin's Games",
+  "short_name": "Robin's Games",
+  "description": "A hub of polished, animated board games for 2–4 players — Snakes & Ladders and Ludo. Play pass-and-play on one screen or online in real time.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#3b0764",

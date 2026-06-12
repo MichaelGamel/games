@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion } from 'motion/react'
-import { TOKEN_COLORS } from '../../game/config'
+import { TOKEN_COLORS, type ColorOption } from '../../game/config'
 import type { PlayerProfile, Role } from '../../net/types'
 import { cn } from '../../lib/cn'
 
@@ -22,16 +22,19 @@ interface OnlineLobbyProps {
   onBack: () => void
   onStart: (params: RoomParams, draft: LobbyDraft) => void
   initial?: LobbyDraft
+  /** Token palette to choose from; defaults to the Snakes set. Ludo passes its own. */
+  colors?: readonly ColorOption[]
 }
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // no ambiguous chars
 const genCode = () =>
   Array.from({ length: 4 }, () => CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)]).join('')
 
-export function OnlineLobby({ onBack, onStart, initial }: OnlineLobbyProps) {
+export function OnlineLobby({ onBack, onStart, initial, colors }: OnlineLobbyProps) {
+  const palette = colors ?? TOKEN_COLORS
   const [tab, setTab] = useState<'create' | 'join'>(initial?.tab ?? 'create')
   const [name, setName] = useState(initial?.name ?? '')
-  const [color, setColor] = useState(initial?.color ?? TOKEN_COLORS[0].value)
+  const [color, setColor] = useState(initial?.color ?? palette[0].value)
   const [code, setCode] = useState(initial?.code ?? '')
 
   const joinDisabled = tab === 'join' && code.trim().length < 4
@@ -103,7 +106,7 @@ export function OnlineLobby({ onBack, onStart, initial }: OnlineLobbyProps) {
 
         <p className="mb-2 text-xs uppercase tracking-wide text-white/50">Token color</p>
         <div className="mb-5 flex flex-wrap gap-2">
-          {TOKEN_COLORS.map((c) => {
+          {palette.map((c) => {
             const selected = color === c.value
             return (
               <button

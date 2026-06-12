@@ -1,11 +1,10 @@
 import { motion } from 'motion/react'
-import type { Player } from '../game/types'
-import { placeLabel, placeMedal } from '../lib/place'
+import { placeLabel, placeMedal, type PodiumPlayer } from '../lib/place'
 import { Confetti } from './Confetti'
 
 interface WinnerOverlayProps {
   /** Finished players in podium order (1st, 2nd, 3rd). Never empty. */
-  standings: Player[]
+  standings: PodiumPlayer[]
   /** Extra context under the winner line (e.g. won because everyone left). */
   subtitle?: string
   /** Omit to hide the Play Again button (e.g. no opponents left). */

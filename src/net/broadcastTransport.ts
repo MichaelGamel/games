@@ -10,22 +10,24 @@
  * newcomer learns the full roster. `welcome` is also reused to broadcast an
  * in-game flag change. `bye` removes a tab on close.
  */
-import type { RoomMember, RoomMessage, TransportFactory } from './types'
+import type { RoomMember, RoomMessage, Transport, TransportArgs } from './types'
+import { DEFAULT_CHANNEL_PREFIX } from './types'
 
-type Wire =
-  | { kind: 'msg'; msg: RoomMessage }
+type Wire<R, S> =
+  | { kind: 'msg'; msg: RoomMessage<R, S> }
   | { kind: 'hello' | 'welcome'; member: RoomMember }
   | { kind: 'bye'; clientId: string }
 
-export const createBroadcastTransport: TransportFactory = ({
+export const createBroadcastTransport = <R, S>({
   code,
   role,
   clientId,
   joinedAt,
   profile,
   handlers,
-}) => {
-  const bc = new BroadcastChannel(`sl-room-${code}`)
+  channelPrefix,
+}: TransportArgs<R, S>): Transport<R, S> => {
+  const bc = new BroadcastChannel(`${channelPrefix ?? DEFAULT_CHANNEL_PREFIX}-${code}`)
 
   // Our own presence; mutated by setInGame and re-gossiped.
   const self: RoomMember = {
@@ -41,7 +43,7 @@ export const createBroadcastTransport: TransportFactory = ({
   const members = new Map<string, RoomMember>([[clientId, self]])
   const emit = () => handlers.onRoster([...members.values()])
 
-  bc.onmessage = (e: MessageEvent<Wire>) => {
+  bc.onmessage = (e: MessageEvent<Wire<R, S>>) => {
     const data = e.data
     if (data.kind === 'msg') {
       handlers.onMessage(data.msg)
@@ -49,7 +51,7 @@ export const createBroadcastTransport: TransportFactory = ({
       if (data.member.clientId === clientId) return
       members.set(data.member.clientId, data.member)
       // Reply so the newcomer learns about us (welcome never triggers a reply).
-      bc.postMessage({ kind: 'welcome', member: self } satisfies Wire)
+      bc.postMessage({ kind: 'welcome', member: self } satisfies Wire<R, S>)
       emit()
     } else if (data.kind === 'welcome') {
       if (data.member.clientId === clientId) return
@@ -64,26 +66,26 @@ export const createBroadcastTransport: TransportFactory = ({
   const helloTimer = setTimeout(() => {
     handlers.onStatus('connected')
     emit()
-    bc.postMessage({ kind: 'hello', member: self } satisfies Wire)
+    bc.postMessage({ kind: 'hello', member: self } satisfies Wire<R, S>)
   }, 60)
 
   // Mirror real presence: closing the tab counts as leaving the room (the
   // Supabase transport gets this for free when the socket drops).
-  const onPageHide = () => bc.postMessage({ kind: 'bye', clientId } satisfies Wire)
+  const onPageHide = () => bc.postMessage({ kind: 'bye', clientId } satisfies Wire<R, S>)
   window.addEventListener('pagehide', onPageHide)
 
   return {
-    send: (msg) => bc.postMessage({ kind: 'msg', msg } satisfies Wire),
+    send: (msg) => bc.postMessage({ kind: 'msg', msg } satisfies Wire<R, S>),
     setInGame: (inGame) => {
       self.inGame = inGame
       members.set(clientId, self)
-      bc.postMessage({ kind: 'welcome', member: self } satisfies Wire)
+      bc.postMessage({ kind: 'welcome', member: self } satisfies Wire<R, S>)
       emit()
     },
     close: () => {
       clearTimeout(helloTimer)
       window.removeEventListener('pagehide', onPageHide)
-      bc.postMessage({ kind: 'bye', clientId } satisfies Wire)
+      bc.postMessage({ kind: 'bye', clientId } satisfies Wire<R, S>)
       bc.close()
     },
   }

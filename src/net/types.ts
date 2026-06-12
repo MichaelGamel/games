@@ -5,6 +5,13 @@
  * (Dependency Inversion). That lets us swap the cross-computer Supabase
  * transport for a same-browser BroadcastChannel transport in development with
  * zero changes to the game code.
+ *
+ * The wire shapes are generic over two payloads so a second game can reuse the
+ * whole transport/roster/sync stack unchanged:
+ *   - `R` — the per-turn resolution broadcast on every move (`turn`).
+ *   - `S` — the per-seat board state carried in snapshots and heartbeats.
+ * Both default to Snakes' shapes (`TurnResolution`, `number`), so every Snakes
+ * call site keeps resolving to exactly today's types with no annotations.
  */
 import type { DieValue, MatchDecision, TurnResolution } from '../game/types'
 
@@ -46,11 +53,11 @@ export interface StartPlayer {
  * Carries every seated player (with `clientId`, so the receiver can locate its
  * own seat) plus the live board state.
  */
-export interface RunningSnapshot {
+export interface RunningSnapshot<S = number> {
   /** Seated players in turn order, including the newly added one (at position 0). */
   lineup: StartPlayer[]
-  /** Board cell per seat, parallel to `lineup`. */
-  positions: number[]
+  /** Per-seat board state, parallel to `lineup` (Snakes: the cell index). */
+  positions: S[]
   currentPlayerIndex: number
   lastRoll: DieValue | null
   /** Seats that already finished, in podium order. */
@@ -77,9 +84,9 @@ export interface RunningSnapshot {
  * snapshot. This is what un-sticks a game after a dropped message (e.g. a
  * backgrounded tab whose connection silently lapsed).
  */
-export type RoomMessage =
+export type RoomMessage<R = TurnResolution, S = number> =
   | { event: 'start'; players: StartPlayer[]; matchId: number }
-  | { event: 'turn'; resolution: TurnResolution; seq: number; matchId: number }
+  | { event: 'turn'; resolution: R; seq: number; matchId: number }
   // The current player left the room: commit number `seq` hands the turn to
   // the next active player on every client.
   | { event: 'skip-turn'; seq: number; matchId: number }
@@ -88,7 +95,7 @@ export type RoomMessage =
   | { event: 'reset' }
   // Host approved a late joiner: existing clients append `player`; the joiner
   // named in `player` initializes its whole game from `snapshot`.
-  | { event: 'add-player'; player: StartPlayer; snapshot: RunningSnapshot }
+  | { event: 'add-player'; player: StartPlayer; snapshot: RunningSnapshot<S> }
   // Host declined a late joiner's request (addressed by clientId).
   | { event: 'reject-join'; clientId: string }
   // Periodic heartbeat of this client's settled game state.
@@ -99,41 +106,51 @@ export type RoomMessage =
       matchId: number
       seq: number
       currentPlayerIndex: number
-      positions: number[]
+      positions: S[]
       winnerId: number | null
     }
   // "I'm behind — somebody send me the current state."
   | { event: 'sync-request'; clientId: string }
   // Authoritative state for one lagging client (addressed by clientId).
-  | { event: 'sync-state'; toClientId: string; fromHost: boolean; snapshot: RunningSnapshot }
+  | { event: 'sync-state'; toClientId: string; fromHost: boolean; snapshot: RunningSnapshot<S> }
   // A quick emoji reaction. Purely cosmetic and ephemeral: it never touches
   // game state, so it bypasses the seq/turnCount sync machinery entirely.
   | { event: 'reaction'; clientId: string; emoji: string }
 
 export type RoomStatus = 'connecting' | 'connected' | 'error'
 
-export interface TransportHandlers {
-  onMessage: (msg: RoomMessage) => void
+export interface TransportHandlers<R = TurnResolution, S = number> {
+  onMessage: (msg: RoomMessage<R, S>) => void
   onStatus: (status: RoomStatus) => void
   /** The full roster (including this client) whenever presence changes. */
   onRoster: (members: RoomMember[]) => void
 }
 
-export interface Transport {
-  send: (msg: RoomMessage) => void
+export interface Transport<R = TurnResolution, S = number> {
+  send: (msg: RoomMessage<R, S>) => void
   /** Re-publish presence with the in-game flag (so late joiners learn the match
    *  has started). */
   setInGame: (inGame: boolean) => void
   close: () => void
 }
 
-export interface TransportArgs {
+export interface TransportArgs<R = TurnResolution, S = number> {
   code: string
   role: Role
   clientId: string
   joinedAt: number
   profile: PlayerProfile
-  handlers: TransportHandlers
+  handlers: TransportHandlers<R, S>
+  /** Channel namespace prefix; both transports open `${channelPrefix ?? 'sl-room'}-${code}`.
+   *  Defaults to Snakes' `'sl-room'`; Ludo passes `'lr-room'` so the two games never
+   *  share a channel even on the same room code. */
+  channelPrefix?: string
 }
 
-export type TransportFactory = (args: TransportArgs) => Transport
+export type TransportFactory<R = TurnResolution, S = number> = (
+  args: TransportArgs<R, S>,
+) => Transport<R, S>
+
+/** The default channel namespace (Snakes). Transports fall back to it when no
+ *  `channelPrefix` is supplied. */
+export const DEFAULT_CHANNEL_PREFIX = 'sl-room'

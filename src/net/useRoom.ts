@@ -9,16 +9,28 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { isSupabaseConfigured } from './config'
 import { createSupabaseTransport } from './supabaseTransport'
 import { createBroadcastTransport } from './broadcastTransport'
-import type { PlayerProfile, RoomMember, RoomMessage, RoomStatus, Role, Transport } from './types'
+import type {
+  PlayerProfile,
+  RoomMember,
+  RoomMessage,
+  RoomStatus,
+  Role,
+  Transport,
+  TransportFactory,
+} from './types'
+import type { TurnResolution } from '../game/types'
 
-interface UseRoomArgs {
+interface UseRoomArgs<R = TurnResolution, S = number> {
   code: string
   role: Role
   profile: PlayerProfile
-  onMessage: (msg: RoomMessage) => void
+  onMessage: (msg: RoomMessage<R, S>) => void
+  /** Channel namespace; defaults to Snakes' `'sl-room'`. A second game passes its
+   *  own (e.g. `'lr-room'`) so the two never share a channel on the same code. */
+  channelPrefix?: string
 }
 
-export interface RoomApi {
+export interface RoomApi<R = TurnResolution, S = number> {
   status: RoomStatus
   /** Everyone currently connected to the room, including this client. */
   members: RoomMember[]
@@ -26,7 +38,7 @@ export interface RoomApi {
   clientId: string
   /** True when running on the same-browser dev fallback (no Supabase keys). */
   testMode: boolean
-  send: (msg: RoomMessage) => void
+  send: (msg: RoomMessage<R, S>) => void
   /** Flip our in-game presence flag (locks the room to late joiners). */
   setInGame: (inGame: boolean) => void
 }
@@ -36,10 +48,16 @@ const genId = () =>
     ? crypto.randomUUID()
     : `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
 
-export function useRoom({ code, role, profile, onMessage }: UseRoomArgs): RoomApi {
+export function useRoom<R = TurnResolution, S = number>({
+  code,
+  role,
+  profile,
+  onMessage,
+  channelPrefix,
+}: UseRoomArgs<R, S>): RoomApi<R, S> {
   const [status, setStatus] = useState<RoomStatus>('connecting')
   const [members, setMembers] = useState<RoomMember[]>([])
-  const transportRef = useRef<Transport | null>(null)
+  const transportRef = useRef<Transport<R, S> | null>(null)
 
   // Stable identity for this connection, created once.
   const idRef = useRef<string>('')
@@ -56,7 +74,7 @@ export function useRoom({ code, role, profile, onMessage }: UseRoomArgs): RoomAp
   const testMode = !isSupabaseConfigured
 
   useEffect(() => {
-    const factory = isSupabaseConfigured
+    const factory: TransportFactory<R, S> | null = isSupabaseConfigured
       ? createSupabaseTransport
       : import.meta.env.DEV
         ? createBroadcastTransport
@@ -73,6 +91,7 @@ export function useRoom({ code, role, profile, onMessage }: UseRoomArgs): RoomAp
       clientId: idRef.current,
       joinedAt: joinedAtRef.current,
       profile: profileRef.current,
+      channelPrefix,
       handlers: {
         onMessage: (m) => onMessageRef.current(m),
         onStatus: setStatus,
@@ -86,9 +105,9 @@ export function useRoom({ code, role, profile, onMessage }: UseRoomArgs): RoomAp
       transportRef.current = null
       setMembers([])
     }
-  }, [code, role])
+  }, [code, role, channelPrefix])
 
-  const send = useCallback((msg: RoomMessage) => transportRef.current?.send(msg), [])
+  const send = useCallback((msg: RoomMessage<R, S>) => transportRef.current?.send(msg), [])
   const setInGame = useCallback((inGame: boolean) => transportRef.current?.setInGame(inGame), [])
 
   return { status, members, clientId: idRef.current, testMode, send, setInGame }
