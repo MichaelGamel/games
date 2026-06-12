@@ -1,17 +1,35 @@
-import { m } from 'motion/react'
+import { lazy, Suspense, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { AnimatePresence } from 'motion/react'
 import { useTranslation } from 'react-i18next'
 import { Backdrop } from '../Backdrop'
-import { BackToHubLink } from '../BackToHubLink'
 import { useDocumentMeta } from '../../lib/useDocumentMeta'
+import { isSupabaseConfigured } from '../../net/config'
+import { UnoMainMenu } from './UnoMainMenu'
+import { UnoLocalGame } from './UnoLocalGame'
+
+// Online play (and the Supabase SDK it pulls in) loads only on demand.
+const UnoOnlineGame = lazy(() =>
+  import('./online/UnoOnlineGame').then((m) => ({ default: m.UnoOnlineGame })),
+)
+
+type Mode = 'menu' | 'local' | 'online'
+
+// Online is available with real Supabase keys, or in dev via the same-browser
+// BroadcastChannel test mode.
+const onlineEnabled = isSupabaseConfigured || import.meta.env.DEV
 
 /**
- * The UNO game shell at `/uno`.
- *
- * Phase 0 placeholder: it claims the route, wires per-route SEO and the
- * back-to-hub affordance, and renders a "coming soon" card. The full 3-mode
- * switch (local vs bots / hot-seat / online) replaces this in Phase 4.
+ * The UNO game shell at `/uno` — a 3-mode switch mirroring the Snakes `App` and
+ * `LudoApp`. Local "pass & play" (vs bots or hot-seat) and real-time online play
+ * (its own lazy chunk) share the same `useUno` core; online never loads on the
+ * menu or local play. A shared `?room=CODE` deep link jumps straight into the
+ * online lobby with the code pre-filled.
  */
 export function UnoApp() {
+  const [searchParams] = useSearchParams()
+  const [initialRoomCode] = useState(() => searchParams.get('room')?.toUpperCase() ?? undefined)
+  const [mode, setMode] = useState<Mode>(initialRoomCode && onlineEnabled ? 'online' : 'menu')
   const { t } = useTranslation(['uno', 'common'])
   useDocumentMeta({
     title: t('uno:metaTitle'),
@@ -20,26 +38,29 @@ export function UnoApp() {
 
   return (
     <Backdrop>
-      <BackToHubLink />
-      <m.main
-        initial={{ opacity: 0, y: 24 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ type: 'spring', stiffness: 260, damping: 22 }}
-        className="relative z-10 flex min-h-screen flex-col items-center justify-center gap-4 px-4 text-center"
-      >
-        <m.span
-          aria-hidden="true"
-          className="text-7xl drop-shadow"
-          animate={{ rotate: [0, -6, 6, 0] }}
-          transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
-        >
-          🃏
-        </m.span>
-        <h1 className="text-4xl font-bold tracking-tight text-white drop-shadow sm:text-5xl">
-          {t('uno:title')}
-        </h1>
-        <p className="max-w-sm text-white/70">{t('uno:comingSoon')}</p>
-      </m.main>
+      <AnimatePresence mode="wait">
+        {mode === 'menu' && (
+          <UnoMainMenu
+            key="menu"
+            onLocal={() => setMode('local')}
+            onOnline={() => setMode('online')}
+            onlineEnabled={onlineEnabled}
+          />
+        )}
+        {mode === 'local' && <UnoLocalGame key="local" onExit={() => setMode('menu')} />}
+        {mode === 'online' && (
+          <Suspense
+            key="online"
+            fallback={
+              <div className="relative z-10 grid min-h-screen place-items-center text-white/70">
+                {t('common:loading')}
+              </div>
+            }
+          >
+            <UnoOnlineGame onExit={() => setMode('menu')} initialRoomCode={initialRoomCode} />
+          </Suspense>
+        )}
+      </AnimatePresence>
     </Backdrop>
   )
 }

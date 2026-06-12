@@ -112,10 +112,16 @@ export interface OnlineMatchGame<R> {
 export interface OnlineMatchAdapter<S> {
   /** Per-seat payloads, parallel to a lineup of `count` seats. */
   buildSeatStates(count: number): S[]
-  /** Replace the local game with an authoritative snapshot's board state. */
+  /** Replace the local game with an authoritative snapshot's board state
+   *  (and, for games that use it, the snapshot's `shared` global blob). */
   applySnapshot(snapshot: RunningSnapshot<S>): void
   /** Does our settled board state equal the broadcast per-seat payloads? */
   seatStatesEqual(positions: S[]): boolean
+  /** Game-global state for the snapshot's `shared` blob — opaque to the net
+   *  layer. Games whose state is fully per-seat omit it (so `shared` stays
+   *  undefined); UNO supplies it so a late joiner / resync rebuilds the full
+   *  deterministic state. */
+  buildShared?(): unknown
 }
 
 export interface UseOnlineMatchArgs<R, S> {
@@ -288,6 +294,9 @@ export function useOnlineMatch<R, S>({
       turnCount: g.turnCount,
       matchId: matchIdRef.current,
       rules: rulesRef.current,
+      // Undefined for the per-seat games (key dropped on the JSON wire); UNO's
+      // adapter fills it with the stock/discard/etc. so a resync is complete.
+      shared: adapterRef.current.buildShared?.(),
     }
   }
 

@@ -4,9 +4,11 @@
  */
 import { summarizeSnakes } from '../game/recap'
 import { summarizeLudo } from '../ludo/recap'
+import { summarizeUno } from '../uno/recap'
 import type { MatchLog } from '../lib/matchLog'
 import type { SnakesRules, TurnResolution } from '../game/types'
 import type { LudoRules, LudoTurnResolution } from '../ludo/types'
+import type { UnoRules, UnoTurnResolution } from '../uno/types'
 import type { RecapRow } from './RecapPanel'
 
 export function snakesRecapRows(log: MatchLog<TurnResolution, SnakesRules>): RecapRow[] {
@@ -28,6 +30,18 @@ export function ludoRecapRows(log: MatchLog<LudoTurnResolution, LudoRules>): Rec
     if (p.timesCaptured > 0) chips.push(`💥 ${p.timesCaptured}`)
     if (p.homeArrivals > 0) chips.push(`🏠 ${p.homeArrivals}`)
     if (p.luckyRolls > 0) chips.push(`✨ ${p.luckyRolls}`)
+    return { name: p.name, color: p.color, chips }
+  })
+}
+
+export function unoRecapRows(log: MatchLog<UnoTurnResolution, UnoRules>): RecapRow[] {
+  return summarizeUno(log).players.map((p) => {
+    const chips: string[] = [`🃏 ${p.cardsPlayed}`]
+    if (p.cardsDrawn > 0) chips.push(`🫳 ${p.cardsDrawn}`)
+    if (p.actionsPlayed > 0) chips.push(`⚡ ${p.actionsPlayed}`)
+    if (p.wildsPlayed > 0) chips.push(`✦ ${p.wildsPlayed}`)
+    if (p.unoCalls > 0) chips.push(`📣 ${p.unoCalls}`)
+    if (p.penalties > 0) chips.push(`💢 ${p.penalties}`)
     return { name: p.name, color: p.color, chips }
   })
 }

@@ -186,6 +186,86 @@ export class SoundEngine {
     this.blip(1760, 0.28, 0.18, 'sine', 0.14) // A6 sparkle
   }
 
+  // ---- UNO ----------------------------------------------------------------
+  // (The Skip card reuses `playSkip` above; these cover the rest.)
+
+  /** Light flick/slap as a card lands on the discard pile. */
+  playCardPlay(): void {
+    if (this.muted || !this.ensure()) return
+    this.blip(520, 0, 0.05, 'square', 0.16)
+    this.blip(360, 0.03, 0.08, 'triangle', 0.18)
+  }
+
+  /** Soft "slide" as a card is drawn off the deck. */
+  playDraw(): void {
+    if (this.muted || !this.ensure()) return
+    const ctx = this.ctx
+    const master = this.master
+    if (!ctx || !master) return
+    const t0 = ctx.currentTime
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.type = 'triangle'
+    osc.frequency.setValueAtTime(300, t0)
+    osc.frequency.exponentialRampToValueAtTime(560, t0 + 0.12)
+    gain.gain.setValueAtTime(0.0001, t0)
+    gain.gain.exponentialRampToValueAtTime(0.16, t0 + 0.02)
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.16)
+    osc.connect(gain).connect(master)
+    osc.start(t0)
+    osc.stop(t0 + 0.2)
+  }
+
+  /** Quick riffle as the discard is reshuffled into a fresh stock. */
+  playShuffle(): void {
+    if (this.muted || !this.ensure()) return
+    for (let i = 0; i < 9; i++) {
+      this.blip(240 + Math.random() * 220, i * 0.035, 0.04, 'triangle', 0.1)
+    }
+  }
+
+  /** A pitch-bending "whoosh" as play direction flips. */
+  playReverse(): void {
+    if (this.muted || !this.ensure()) return
+    const ctx = this.ctx
+    const master = this.master
+    if (!ctx || !master) return
+    const t0 = ctx.currentTime
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.type = 'triangle'
+    osc.frequency.setValueAtTime(420, t0)
+    osc.frequency.exponentialRampToValueAtTime(840, t0 + 0.18)
+    osc.frequency.exponentialRampToValueAtTime(360, t0 + 0.36)
+    gain.gain.setValueAtTime(0.0001, t0)
+    gain.gain.exponentialRampToValueAtTime(0.2, t0 + 0.03)
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.4)
+    osc.connect(gain).connect(master)
+    osc.start(t0)
+    osc.stop(t0 + 0.44)
+  }
+
+  /** Bright ascending triad when a wild color is chosen. */
+  playColorPick(): void {
+    if (this.muted || !this.ensure()) return
+    const notes = [523.25, 698.46, 880] // C5 F5 A5
+    notes.forEach((f, i) => this.blip(f, i * 0.07, 0.18, 'sine', 0.22))
+  }
+
+  /** Two-note "U-NO!" call. */
+  playUnoCall(): void {
+    if (this.muted || !this.ensure()) return
+    this.blip(659.25, 0, 0.16, 'square', 0.24) // E5
+    this.blip(987.77, 0.16, 0.24, 'square', 0.26) // B5
+  }
+
+  /** Low descending "donk" for a penalty draw or a caught miss. */
+  playPenalty(): void {
+    if (this.muted || !this.ensure()) return
+    this.blip(220, 0, 0.16, 'sawtooth', 0.22)
+    this.blip(165, 0.12, 0.22, 'sawtooth', 0.2)
+  }
+
   /** Victory fanfare. */
   playWin(): void {
     if (this.muted || !this.ensure()) return

@@ -1,5 +1,7 @@
 # Plan: Add an UNO game at `/uno`
 
+**Progress:** Phase 0 ✅ · Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ · Phase 4 ✅ · Phase 5 ✅ · Phase 6 ✅ — **complete.**
+
 ## Context
 
 "Robin's Games" is a multi-game hub (`src/Root.tsx` router → `/` hub, `/snakes`, `/ludo`, `/four`).
@@ -74,11 +76,15 @@ the Ludo work. UNO needs two small additive changes:
   & Ludo keep passing 4). Confirm no call site hardcodes the constant past the parameter boundary.
 - **A game-specific snapshot blob.** UNO has *global* state that doesn't fit `RunningSnapshot`'s fixed
   per-seat `positions: S[]` shape (the stock, discard, active color, direction, pending-draw counter,
-  per-seat scores, round number, deck seed). Extend the snapshot generically:
-  `RunningSnapshot<S = number, G = undefined>` gains an optional `shared?: G`. Snakes/Ludo/Four pass
-  nothing (default `undefined`) → **zero changes**. UNO fills `shared` so a late-joiner / resync
-  rebuilds the full deterministic state. `sync-ping` stays cheap (compares hand counts + `turnCount` +
-  `matchId`); the full `shared` blob rides only on `sync-state` and `add-player` snapshots.
+  per-seat scores, round number, deck seed). Extend the snapshot with an optional `shared?: unknown`
+  field — opaque to the net layer, **exactly like the existing `rules?: unknown`** (the transports
+  forward whole messages without inspecting them, so no generic `G` parameter is threaded; UNO
+  validates `shared` on receipt the way `rules` is validated via `asXxxRules()`). The producer side is
+  an **optional** `buildShared?(): unknown` on `OnlineMatchAdapter`; `buildSnapshot` calls it, so
+  Snakes/Ludo/Four (which don't implement it) emit `shared: undefined` — the key is dropped on the
+  JSON wire → **zero changes**. UNO fills `shared` so a late-joiner / resync rebuilds the full
+  deterministic state. `sync-ping` stays cheap (compares hand counts + `turnCount` + `matchId`); the
+  full `shared` blob rides only on `sync-state` and `add-player` snapshots.
 - **Channel namespace.** UNO passes `channelPrefix:'uno-room'` (the mechanism already exists) so UNO
   and other games never cross-talk on the same room code.
 
@@ -163,9 +169,24 @@ all enabled house rules, single-round and score-to-target endings.
 maxPlayers: UNO_MAX_PLAYERS, … })`. Reuse `OnlineLobby` (additive `colors` prop already exists), the
 full self-healing sync (sync-ping/request/state, `SKIP_GRACE_MS`, `FORFEIT_GRACE_MS`, host-wins
 divergence, late-joiner approval, presence notices, reactions). Supply the `OnlineMatchAdapter`:
-`buildSeatStates` → per-seat `{ hand, saidUno, score }`; `applySnapshot` restores both the seat states
-**and** `snapshot.shared` (stock/discard/activeColor/direction/pendingDraw/scores/round/seed);
-`seatStatesEqual` compares hand counts + discard top + draw index for divergence detection.
+
+- **Secrecy in the ping.** The net layer broadcasts `positions: S[]` on every `sync-ping` (~4s). So
+  `S` (=`UnoSeatState`) must NOT carry the hand — that would publish every hand to every client
+  continuously, defeating the UI-hidden model. `S` is the **cheap** `{ handCount, saidUno, score }`;
+  the full `hands: UnoCard[][]` live in the `shared` blob, which rides only on `sync-state` /
+  `add-player`. (Occasional sync-state exposure is within the accepted "UI-hidden, not cryptographic"
+  model; a continuous ping leak is not.)
+- `buildSeatStates` → per-seat `{ handCount, saidUno, score }`; `buildShared()` →
+  `{ hands, stock, discard, activeColor, direction, pendingDraw, pendingDrawType, reshuffleCount,
+  deckSeed, roundNumber }`; `applySnapshot` rebuilds the lineup's hands from the validated
+  `snapshot.shared.hands` (seat meta from `positions`) and restores the global state from `shared`;
+  `seatStatesEqual` compares per-seat hand counts (the net layer also checks `currentPlayerIndex` and
+  `winnerId`, so equal counts at an equal `turnCount` is a strong divergence signal).
+- **Start seed rides in the rules payload.** `matchRules: () => ({ rules, deckSeed })` so the `start`
+  broadcast carries the seed (the net layer treats `rules` as opaque, exactly like Snakes' board
+  seed). Play Again reuses that payload → same opening deal (mirrors Snakes reusing its board seed).
+  Round continues use the deterministic `nextRoundSeed`, so the `decide` event carries only the
+  decision.
 
 **Verify Phase 5:** multi-tab online via BroadcastChannel (no Supabase keys): full match, action
 cards, stacking, challenge, seven-zero, late join (gets full `shared` snapshot), leave/skip/forfeit,
@@ -276,8 +297,9 @@ skipped seat; wild color pick animates the `ActiveColorChip`; reshuffle does a q
   cross-client reshuffle equality in `deck.test.ts` before any UI.
 - **Snapshot completeness:** late-joiner correctness depends entirely on the `shared` blob; a joiner
   with `matchLog===null` gets no replay/recap (same as other games) but must get full live state.
-- **Net `shared` field regressing other games:** `G` defaults to `undefined`; gate Phase 1 on green
-  Snakes/Ludo/Four tests + build before any UNO code.
+- **Net `shared` field regressing other games:** `shared?: unknown` is an optional field and
+  `buildShared?()` an optional adapter method, so games that ignore them emit `shared: undefined`
+  (dropped on the JSON wire); gate Phase 1 on green Snakes/Ludo/Four tests + build before any UNO code.
 - **6-seat roster/UI scaling:** thread `maxPlayers` (don't bump the shared constant); verify
   waiting-room/player-panel layouts at 6 seats.
 - **Secrecy expectation:** hands are UI-hidden, not cryptographically secret (devtools can read them);

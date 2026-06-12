@@ -61,6 +61,14 @@ export interface RunningSnapshot<S = number> {
   /** The match's rule variant, opaque to the net layer (each game validates
    *  its own shape on receipt). */
   rules?: unknown
+  /** Game-global state that doesn't fit the per-seat `positions` shape — opaque
+   *  to the net layer, exactly like `rules` (each game validates its own shape
+   *  on receipt). Snakes/Ludo/Four are fully per-seat and leave it undefined;
+   *  UNO carries the stock, discard, active color, direction, pending-draw
+   *  counter, scores, round number and deck seed so a late joiner / resync
+   *  rebuilds the full deterministic state. Rides only on the snapshot-bearing
+   *  messages (`sync-state`, `add-player`), never on the cheap `sync-ping`. */
+  shared?: unknown
   currentPlayerIndex: number
   /** Total of the last roll (sum when playing with two dice). */
   lastRoll: number | null
