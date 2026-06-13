@@ -37,7 +37,7 @@ export function FourGameScreen({ game, online }: FourGameScreenProps) {
         {online && <RoomBadge meta={online} />}
       </header>
 
-      <PlayerChips game={game} myId={myId} />
+      <PlayerChips game={game} myId={myId} absentIds={online?.absentSeats} />
 
       <div className="w-full max-w-xl">
         <FourBoard
@@ -45,6 +45,7 @@ export function FourGameScreen({ game, online }: FourGameScreenProps) {
           players={game.players}
           activeDrop={game.activeDrop}
           winLine={game.winLine}
+          winLitCount={game.winLit}
           canDrop={canDrop}
           onDrop={game.drop}
         />
@@ -79,21 +80,25 @@ export function FourGameScreen({ game, online }: FourGameScreenProps) {
 const PlayerChips = memo(function PlayerChips({
   game,
   myId,
+  absentIds,
 }: {
   game: FourController
   myId: number | null
+  absentIds?: readonly number[]
 }) {
   const { t } = useTranslation(['four', 'common'])
   return (
     <ul className="flex w-full max-w-xl gap-2" aria-label={t('common:setup.players')}>
       {game.players.map((p) => {
-        const active = p.id === game.currentPlayerIndex && game.phase !== 'won'
+        const absent = absentIds?.includes(p.id) ?? false
+        const active = p.id === game.currentPlayerIndex && game.phase !== 'won' && !absent
         return (
           <li
             key={p.id}
             className={cn(
               'flex flex-1 items-center gap-2 rounded-xl bg-white/5 px-3 py-2 ring-1 backdrop-blur transition',
               active ? 'ring-white/40' : 'ring-white/10 opacity-70',
+              absent && 'opacity-40 grayscale',
             )}
             style={active ? { boxShadow: `0 0 0 2px ${p.color}55` } : undefined}
           >
@@ -119,6 +124,11 @@ const PlayerChips = memo(function PlayerChips({
                 </span>
               )}
             </span>
+            {absent && (
+              <span className="shrink-0 rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/60">
+                {t('common:game.away')}
+              </span>
+            )}
             <AnimatePresence>
               {active && (
                 <m.span

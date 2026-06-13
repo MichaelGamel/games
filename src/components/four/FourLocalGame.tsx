@@ -33,7 +33,7 @@ export function FourLocalGame({ onExit }: { onExit: () => void }) {
         {game.phase === 'won' && game.draw && (
           <DrawOverlay key="draw" onPlayAgain={playAgain} onSecondary={game.reset} />
         )}
-        {game.phase === 'won' && !game.draw && game.standings.length > 0 && (
+        {game.phase === 'won' && !game.draw && !game.celebratingWin && game.standings.length > 0 && (
           <WinnerOverlay
             key="winner"
             standings={game.standings}

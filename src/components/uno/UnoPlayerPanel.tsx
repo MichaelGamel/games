@@ -15,6 +15,8 @@ interface UnoPlayerPanelProps {
   phase: UnoPhase
   /** Online: id of the local player (to mark "you"). */
   myId?: number | null
+  /** Online: seat ids whose player has left the room (greyed, not removed). */
+  absentIds?: readonly number[]
 }
 
 /** The roster: each seat's hand count, turn marker, UNO badge and score. */
@@ -27,23 +29,26 @@ export const UnoPlayerPanel = memo(function UnoPlayerPanel({
   currentPlayerIndex,
   phase,
   myId,
+  absentIds,
 }: UnoPlayerPanelProps) {
   const { t } = useTranslation(['uno', 'common'])
   return (
     <ul className="grid w-full grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-2" aria-label={t('common:setup.players')}>
       {players.map((p) => {
         const count = handCounts[p.id] ?? 0
-        const isActive = p.id === currentPlayerIndex && phase !== 'matchEnd'
+        const absent = absentIds?.includes(p.id) ?? false
+        const isActive = p.id === currentPlayerIndex && phase !== 'matchEnd' && !absent
         const onUno = count === 1 && saidUno[p.id]
         const exposed = count === 1 && !saidUno[p.id]
         return (
           <m.li
             key={p.id}
-            animate={{ scale: isActive ? 1.02 : 1, opacity: isActive || phase === 'matchEnd' ? 1 : 0.72 }}
+            animate={{ scale: isActive ? 1.02 : 1, opacity: absent ? 0.45 : isActive || phase === 'matchEnd' ? 1 : 0.72 }}
             transition={{ type: 'spring', stiffness: 300, damping: 24 }}
             className={cn(
-              'flex items-center gap-2 rounded-lg bg-white/5 px-2 py-1.5 ring-1 backdrop-blur lg:gap-3 lg:rounded-xl lg:p-3',
+              'flex items-center gap-2 rounded-lg bg-white/5 px-2 py-1.5 ring-1 backdrop-blur transition-[filter] lg:gap-3 lg:rounded-xl lg:p-3',
               isActive ? 'ring-white/40' : 'ring-white/10',
+              absent && 'grayscale',
             )}
             style={isActive ? { boxShadow: `0 0 0 2px ${p.color}55` } : undefined}
           >
@@ -71,12 +76,17 @@ export const UnoPlayerPanel = memo(function UnoPlayerPanel({
                   )}
                   {myId === p.id && <span className="ms-1 text-xs font-normal text-white/50">{t('common:game.you')}</span>}
                 </p>
-                {onUno && (
+                {absent && (
+                  <span className="shrink-0 rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/60">
+                    {t('common:game.away')}
+                  </span>
+                )}
+                {!absent && onUno && (
                   <span className="shrink-0 rounded-full bg-amber-400/20 px-1.5 py-0.5 text-[10px] font-bold text-amber-300 ring-1 ring-amber-300/40">
                     UNO!
                   </span>
                 )}
-                {exposed && (
+                {!absent && exposed && (
                   <span className="shrink-0 animate-pulse rounded-full bg-orange-500/25 px-1.5 py-0.5 text-[10px] font-bold text-orange-300">
                     ●1
                   </span>

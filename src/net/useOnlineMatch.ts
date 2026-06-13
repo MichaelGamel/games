@@ -61,9 +61,15 @@ const REACTION_MS = 2600
 /** Minimum spacing between our own reaction sends (anti-spam). */
 const REACTION_THROTTLE_MS = 350
 /** How long the current player may sit on an idle turn before it is skipped.
- *  Their own client broadcasts the skip (an absent player's turn is handled
- *  by the presence grace instead). */
+ *  Their own client broadcasts the skip first; a present peer covers for them
+ *  a few seconds later (see TURN_TIMER_BACKUP_MS). */
 const TURN_TIMER_MS = 30_000
+/** Grace after TURN_TIMER_MS before a present peer skips a stalled current
+ *  player on their behalf. The actor's own client gets first crack at the
+ *  skip; this backstops the (common, on mobile) case where their tab is
+ *  frozen in the background and its timer never fires — without it the whole
+ *  room hangs on one idle player forever. */
+const TURN_TIMER_BACKUP_MS = 4000
 /** How often a watching spectator re-asks for the match state until adopted. */
 const SPECTATE_RETRY_MS = 2000
 
@@ -164,6 +170,8 @@ export interface OnlineMatch<R> {
   rejectJoiner: (member: RoomMember) => void
   /** True when every player from the started lineup is still connected. */
   everyonePresent: boolean
+  /** Seat indices whose player has left the room (for greying their card). */
+  absentSeats: readonly number[]
   /** True while enough active players are connected to keep playing. */
   canPlay: boolean
   notices: Notice[]
@@ -601,11 +609,43 @@ export function useOnlineMatch<R, S>({
     send({ event: 'add-player', player: newPlayer, snapshot })
   }
 
+  // Host: turn a connected member away (they see the "declined" card). Remember
+  // them so the running-match prompt / auto-reject sweep ignores them after.
+  const rejectMember = useCallback(
+    (clientId: string) => {
+      setDeclinedIds((prev) => (prev.has(clientId) ? prev : new Set(prev).add(clientId)))
+      send({ event: 'reject-join', clientId })
+    },
+    [send],
+  )
+
   // Host: turn a late joiner away (they return to the lobby).
-  const rejectJoiner = (member: RoomMember) => {
-    setDeclinedIds((prev) => new Set(prev).add(member.clientId))
-    send({ event: 'reject-join', clientId: member.clientId })
-  }
+  const rejectJoiner = (member: RoomMember) => rejectMember(member.clientId)
+
+  // Reserve every seated identity for the life of the match — including players
+  // who left (their greyed card keeps the seat). A newcomer who picks a name or
+  // color already in the lineup is turned away so they go back and choose a
+  // fresh one, rather than impersonating someone who just walked away. The
+  // joiner can't see departed players via presence, so only the host (which
+  // holds the authoritative lineup) can enforce this. We track who we've already
+  // bounced in a ref (not state): it only suppresses duplicate broadcasts and
+  // these members are kept out of `joinRequests` by the same clash filter, so
+  // no re-render is needed — and broadcasting (not setState) is the only effect.
+  const autoRejectedRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    if (!amActingHost || game.phase === 'setup') return
+    const lineupIds = new Set((startedPlayers ?? []).map((p) => p.clientId))
+    const names = new Set(game.players.map((p) => p.name.trim().toLowerCase()))
+    const colors = new Set(game.players.map((p) => p.color))
+    for (const m of room.members) {
+      if (m.clientId === myClientId || lineupIds.has(m.clientId)) continue
+      if (declinedIds.has(m.clientId) || autoRejectedRef.current.has(m.clientId)) continue
+      if (names.has(m.name.trim().toLowerCase()) || colors.has(m.color)) {
+        autoRejectedRef.current.add(m.clientId)
+        send({ event: 'reject-join', clientId: m.clientId })
+      }
+    }
+  }, [amActingHost, game.phase, game.players, startedPlayers, room.members, declinedIds, myClientId, send])
 
   const canStart = role === 'host' && game.phase === 'setup' && seats.length >= MIN_PLAYERS
 
@@ -616,6 +656,19 @@ export function useOnlineMatch<R, S>({
 
   const lineup = startedPlayers ?? []
   const everyonePresent = startedPlayers ? lineup.every((p) => present(p.clientId)) : false
+
+  // Seats whose player has left the room (presence dropped). Their card stays
+  // in the roster, greyed out, rather than vanishing — and their name/color
+  // stays reserved (see the auto-reject effect below). Memoised so the
+  // memoised player panels only re-render when presence actually changes.
+  const absentSeats = useMemo(
+    () =>
+      (startedPlayers ?? []).reduce<number[]>((acc, p, i) => {
+        if (!(p.clientId === myClientId || rosterIds.has(p.clientId))) acc.push(i)
+        return acc
+      }, []),
+    [startedPlayers, rosterIds, myClientId],
+  )
 
   // Seats still racing (finished players keep their seats but leave the
   // rotation, and their presence no longer gates the match).
@@ -743,31 +796,56 @@ export function useOnlineMatch<R, S>({
     return () => clearInterval(interval)
   }, [timedTurnActive])
 
-  // When it is OUR turn and the deadline passes, skip ourselves. (An absent
-  // player's turn is skipped by the presence grace; this handles a present
-  // but idle one.) Guards re-run on fire because everything is read fresh.
-  const skipSelfRef = useRef<() => void>(() => {})
-  const skipSelf = () => {
+  // Skip the current player's idle turn once the deadline passes. (An *absent*
+  // current player is handled by the presence grace above; this is the present-
+  // but-idle case.) `expectClientId` pins which player we meant to skip, so a
+  // timer that fires just after the turn already moved on becomes a no-op
+  // rather than skipping the wrong seat. Guards re-run on fire (state is read
+  // fresh) and duplicate skips dedupe by sequence number.
+  const skipCurrentRef = useRef<(expectClientId: string) => void>(() => {})
+  const skipCurrent = (expectClientId: string) => {
     const g = gameRef.current
     if (g.phase !== 'idle') return
     const cur = startedRef.current?.[g.currentPlayerIndex]
-    if (!cur || cur.clientId !== myClientId) return
+    if (!cur || cur.clientId !== expectClientId) return
     const { seq, busy } = g.syncStatus()
     if (busy) return
     send({ event: 'skip-turn', seq: seq + 1, matchId: matchIdRef.current })
     g.applySkip(seq + 1)
   }
   useEffect(() => {
-    skipSelfRef.current = skipSelf
+    skipCurrentRef.current = skipCurrent
   })
 
+  // Our own idle turn: skip ourselves at the deadline.
   const myTurnTimed = timedTurnActive && mySeat >= 0 && game.currentPlayerIndex === mySeat
   useEffect(() => {
     if (!myTurnTimed) return
-    const timer = setTimeout(() => skipSelfRef.current(), TURN_TIMER_MS)
+    const timer = setTimeout(() => skipCurrentRef.current(myClientId), TURN_TIMER_MS)
     return () => clearTimeout(timer)
     // Re-arm per turn, mirroring the deadline effect above.
-  }, [myTurnTimed, game.currentPlayerIndex, game.turnCount])
+  }, [myTurnTimed, game.currentPlayerIndex, game.turnCount, myClientId])
+
+  // Backstop another player's stalled idle turn. The actor's own client should
+  // skip first (above); we cover for it a beat later in case its tab is frozen.
+  // Only the single designated responder (the first present seat after the
+  // current one) arms this, so the skip isn't broadcast by the whole room.
+  const backupTimed =
+    timedTurnActive &&
+    mySeat >= 0 &&
+    game.currentPlayerIndex !== mySeat &&
+    currentClientId != null &&
+    present(currentClientId) &&
+    skipResponderSeat === mySeat
+  useEffect(() => {
+    if (!backupTimed || currentClientId == null) return
+    const timer = setTimeout(
+      () => skipCurrentRef.current(currentClientId),
+      TURN_TIMER_MS + TURN_TIMER_BACKUP_MS,
+    )
+    return () => clearTimeout(timer)
+    // Re-arm per turn so each stalled player is covered in sequence.
+  }, [backupTimed, currentClientId, game.currentPlayerIndex, game.turnCount])
 
   // ---- Lightweight notices ("X left", "X is back", "turn skipped") --------
 
@@ -846,6 +924,7 @@ export function useOnlineMatch<R, S>({
     acceptJoiner,
     rejectJoiner,
     everyonePresent,
+    absentSeats,
     canPlay,
     notices,
     reactions,

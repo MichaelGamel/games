@@ -108,6 +108,24 @@ body {
   overflow-x: hidden;
 }
 
+/* This is a game played heavily on phones: an accidental long-press or drag
+   that selects text/UI mid-play is pure annoyance, never useful. Disable
+   selection (and the iOS long-press callout / tap highlight) everywhere, then
+   re-enable it only where typing happens. */
+* {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+input,
+textarea,
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 /* The 3D dice needs a perspective context */
 .scene-3d {
   perspective: 600px;

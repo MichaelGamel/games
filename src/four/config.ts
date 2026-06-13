@@ -41,6 +41,10 @@ export const TIMING = {
   dropMs: 480,
   /** Pause on the landed disc before the turn commits. */
   settleMs: 220,
+  /** Beat between each winning disc lighting up in the victory walk. */
+  winStepMs: 620,
+  /** Hold on the fully-lit win line (with the fanfare) before the overlay. */
+  winFanfareMs: 1100,
   /** How long the "turn skipped" notice stays on screen. */
   skipFlashMs: 3200,
   /** "Thinking" pause before a computer player auto-drops (local play). */

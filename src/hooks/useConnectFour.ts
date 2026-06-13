@@ -17,7 +17,7 @@ import {
 } from '../four/fourReducer'
 import { dropRow, resolveDrop } from '../four/rules'
 import { TIMING } from '../four/config'
-import type { FourResolution, MatchDecision } from '../four/types'
+import type { Cell, FourResolution, MatchDecision } from '../four/types'
 import { createTurnSequencer, type SequencerHandlers } from '../lib/turnSequencer'
 import { useFlash } from './useFlash'
 import { useSound } from './useSound'
@@ -45,6 +45,10 @@ export interface UseConnectFourOptions {
 export function useConnectFour({ controlsPlayer = 'all', hooks }: UseConnectFourOptions = {}) {
   const [state, dispatch] = useReducer(fourReducer, initialFourState)
   const [activeDrop, setActiveDrop] = useState<ActiveDrop | null>(null)
+  // The victory walk: how many of the winning discs are currently lit, and
+  // whether the celebration is still running (the winner overlay waits for it).
+  const [winLit, setWinLit] = useState(0)
+  const [celebratingWin, setCelebratingWin] = useState(false)
   const skipFlash = useFlash()
   const { sound, muted, toggleMute } = useSound()
   const reduced = useReducedMotion()
@@ -59,9 +63,41 @@ export function useConnectFour({ controlsPlayer = 'all', hooks }: UseConnectFour
   const timings = useMemo(
     () =>
       reduced
-        ? { drop: 120, settle: 80 }
-        : { drop: TIMING.dropMs, settle: TIMING.settleMs },
+        ? { drop: 120, settle: 80, winStep: 220, winFanfare: 500 }
+        : {
+            drop: TIMING.dropMs,
+            settle: TIMING.settleMs,
+            winStep: TIMING.winStepMs,
+            winFanfare: TIMING.winFanfareMs,
+          },
     [reduced],
+  )
+
+  /**
+   * Light the winning discs one at a time (ascending chime each), hold on the
+   * fully-lit line with the fanfare, then release. The winner overlay stays
+   * hidden until this resolves. Runs inside the turn's animation run, so a
+   * reset/restart (which flips `alive`) cuts it short. Replayed identically on
+   * every client, since it keys off the resolution's win line.
+   */
+  const celebrateWin = useCallback(
+    async (winLine: Cell[] | null, alive: () => boolean) => {
+      const cells = winLine ?? []
+      setCelebratingWin(true)
+      setWinLit(0)
+      for (let i = 0; i < cells.length; i++) {
+        if (!alive()) return
+        setWinLit(i + 1)
+        sound.playConnectStep(i)
+        await delay(timings.winStep)
+      }
+      if (!alive()) return
+      sound.playWin()
+      await delay(timings.winFanfare)
+      if (!alive()) return
+      setCelebratingWin(false)
+    },
+    [sound, timings],
   )
 
   /** Animate a fully-resolved drop, then commit it. Shared by local + remote. */
@@ -78,9 +114,9 @@ export function useConnectFour({ controlsPlayer = 'all', hooks }: UseConnectFour
       if (!alive()) return
       setActiveDrop(null)
       dispatch({ type: 'COMMIT_TURN', resolution })
-      if (resolution.isWin) sound.playWin()
+      if (resolution.isWin) await celebrateWin(resolution.winLine, alive)
     },
-    [sound, timings],
+    [sound, timings, celebrateWin],
   )
 
   /** Hand the turn to the other player because the current one left. */
@@ -158,6 +194,8 @@ export function useConnectFour({ controlsPlayer = 'all', hooks }: UseConnectFour
 
   const clearTransients = useCallback(() => {
     setActiveDrop(null)
+    setCelebratingWin(false)
+    setWinLit(0)
     skipFlash.clear()
   }, [skipFlash])
 
@@ -241,6 +279,10 @@ export function useConnectFour({ controlsPlayer = 'all', hooks }: UseConnectFour
     winner,
     standings,
     activeDrop,
+    /** How many of the winning discs are lit during the victory walk. */
+    winLit,
+    /** True while the win line is still being celebrated (overlay waits). */
+    celebratingWin,
     skipFlash: skipFlash.flash,
     muted,
     toggleMute,

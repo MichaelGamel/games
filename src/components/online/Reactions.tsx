@@ -14,8 +14,14 @@ import type { FloatingReaction } from '../../net/useOnlineMatch'
 
 export type { FloatingReaction }
 
-/** The quick-react palette. */
-const REACTION_EMOJIS = ['👍', '😂', '😮', '😢', '🎉', '🔥'] as const
+/** The quick-react palette — laid out as a compact grid in the picker. */
+const REACTION_EMOJIS = [
+  '👍', '❤️', '😂', '🎉',
+  '🔥', '😮', '😢', '😎',
+  '🤔', '👏', '🙌', '🥳',
+  '😱', '💯', '🤯', '👀',
+  '😭', '🤩', '😡', '🫡',
+] as const
 
 /** Corner picker: a button that pops a column of emoji upward. */
 export function ReactionBar({ onReact }: { onReact: (emoji: string) => void }) {
@@ -31,7 +37,7 @@ export function ReactionBar({ onReact }: { onReact: (emoji: string) => void }) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.9 }}
             transition={{ duration: 0.18 }}
-            className="flex flex-col gap-1 rounded-2xl bg-night-800/95 p-1.5 shadow-xl ring-1 ring-white/15 backdrop-blur"
+            className="grid grid-cols-4 gap-1 rounded-2xl bg-night-800/95 p-1.5 shadow-xl ring-1 ring-white/15 backdrop-blur"
           >
             {REACTION_EMOJIS.map((emoji) => (
               <button

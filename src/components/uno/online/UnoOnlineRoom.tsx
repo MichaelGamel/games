@@ -193,6 +193,7 @@ export function UnoOnlineRoom({ code, role, profile, onLeave }: UnoOnlineRoomPro
         online={{
           roomCode: code,
           everyonePresent: match.everyonePresent,
+          absentSeats: match.absentSeats,
           canPlay: match.canPlay,
           testMode: match.testMode,
           turnSecondsLeft: match.turnSecondsLeft,

@@ -8,6 +8,8 @@ export interface OnlineMeta {
   everyonePresent: boolean
   /** True while enough active players are connected to keep playing. */
   canPlay: boolean
+  /** Seat indices whose player has left the room (greyed in the roster). */
+  absentSeats?: readonly number[]
   testMode: boolean
   /** Seconds left on the current turn's clock, or null when no clock runs. */
   turnSecondsLeft?: number | null

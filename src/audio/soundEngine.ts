@@ -266,6 +266,19 @@ export class SoundEngine {
     this.blip(165, 0.12, 0.22, 'sawtooth', 0.2)
   }
 
+  /**
+   * Ascending chime as each winning Connect Four disc lights up in turn. The
+   * pitch climbs with `step` (0-based) so the four discs ring out a rising
+   * arpeggio that resolves into the win fanfare.
+   */
+  playConnectStep(step: number): void {
+    if (this.muted || !this.ensure()) return
+    const scale = [523.25, 659.25, 783.99, 1046.5, 1318.51, 1567.98] // C5 E5 G5 C6 E6 G6
+    const f = scale[Math.min(step, scale.length - 1)]
+    this.blip(f, 0, 0.3, 'triangle', 0.3)
+    this.blip(f * 2, 0.03, 0.18, 'sine', 0.12) // shimmer an octave up
+  }
+
   /** Victory fanfare. */
   playWin(): void {
     if (this.muted || !this.ensure()) return

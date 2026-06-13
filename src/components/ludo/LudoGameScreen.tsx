@@ -73,6 +73,7 @@ export function LudoGameScreen({ game, online }: LudoGameScreenProps) {
           phase={game.phase}
           finishedOrder={game.finishedOrder}
           myId={myId}
+          absentIds={online?.absentSeats}
         />
       </div>
 

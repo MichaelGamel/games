@@ -148,6 +148,7 @@ export function OnlineRoom({ code, role, profile, onLeave }: OnlineRoomProps) {
         online={{
           roomCode: code,
           everyonePresent: match.everyonePresent,
+          absentSeats: match.absentSeats,
           canPlay: match.canPlay,
           testMode: match.testMode,
           turnSecondsLeft: match.turnSecondsLeft,

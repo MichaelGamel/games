@@ -14,6 +14,8 @@ interface LudoPlayerPanelProps {
   finishedOrder: number[]
   /** In online play, the id of the local player (to mark "you"). */
   myId?: number | null
+  /** Online: seat ids whose player has left the room (greyed, not removed). */
+  absentIds?: readonly number[]
 }
 
 /**
@@ -27,6 +29,7 @@ export const LudoPlayerPanel = memo(function LudoPlayerPanel({
   phase,
   finishedOrder,
   myId,
+  absentIds,
 }: LudoPlayerPanelProps) {
   const { t } = useTranslation(['ludo', 'common'])
   return (
@@ -37,7 +40,8 @@ export const LudoPlayerPanel = memo(function LudoPlayerPanel({
       {players.map((p) => {
         const rank = finishedOrder.indexOf(p.id)
         const finished = rank >= 0
-        const isActive = p.id === currentPlayerIndex && phase !== 'won' && !finished
+        const absent = absentIds?.includes(p.id) ?? false
+        const isActive = p.id === currentPlayerIndex && phase !== 'won' && !finished && !absent
         const home = p.tokens.filter((t) => t === PROGRESS_GOAL).length
         const progress = Math.round((home / TOKENS_PER_PLAYER) * 100)
 
@@ -46,12 +50,13 @@ export const LudoPlayerPanel = memo(function LudoPlayerPanel({
             key={p.id}
             animate={{
               scale: isActive ? 1.02 : 1,
-              opacity: isActive || phase === 'won' || finished ? 1 : 0.7,
+              opacity: absent ? 0.45 : isActive || phase === 'won' || finished ? 1 : 0.7,
             }}
             transition={{ type: 'spring', stiffness: 300, damping: 24 }}
             className={cn(
-              'flex items-center gap-2 rounded-lg bg-white/5 px-2 py-1.5 ring-1 backdrop-blur lg:gap-3 lg:rounded-xl lg:p-3',
+              'flex items-center gap-2 rounded-lg bg-white/5 px-2 py-1.5 ring-1 backdrop-blur transition-[filter] lg:gap-3 lg:rounded-xl lg:p-3',
               isActive ? 'ring-white/40' : 'ring-white/10',
+              absent && 'grayscale',
             )}
             style={isActive ? { boxShadow: `0 0 0 2px ${p.color}55` } : undefined}
           >
@@ -87,14 +92,18 @@ export const LudoPlayerPanel = memo(function LudoPlayerPanel({
                     </span>
                   )}
                 </p>
-                {/* Mobile: medal when finished, else home count. */}
+                {/* Mobile: medal when finished, “away”, else home count. */}
                 <span className="shrink-0 text-xs tabular-nums text-white/70 lg:hidden">
-                  {finished ? placeMedal(rank) : `${home}/${TOKENS_PER_PLAYER}`}
+                  {finished ? placeMedal(rank) : absent ? '🚪' : `${home}/${TOKENS_PER_PLAYER}`}
                 </span>
-                {/* Desktop: medal + place, or turn marker. */}
+                {/* Desktop: medal + place, “away”, or turn marker. */}
                 {finished ? (
                   <span className="hidden shrink-0 text-sm font-bold text-amber-300 lg:inline">
                     {placeMedal(rank)} {t(placeKey(rank))}
+                  </span>
+                ) : absent ? (
+                  <span className="hidden shrink-0 rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/60 lg:inline">
+                    {t('common:game.away')}
                   </span>
                 ) : isActive ? (
                   <span className="hidden shrink-0 text-xs font-semibold uppercase tracking-wide text-white/70 lg:inline">

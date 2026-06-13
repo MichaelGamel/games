@@ -69,6 +69,7 @@ export function GameScreen({ game, online }: GameScreenProps) {
           finishedOrder={game.finishedOrder}
           finishCell={game.board.size * game.board.size}
           myId={myId}
+          absentIds={online?.absentSeats}
         />
       </div>
 

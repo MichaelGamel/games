@@ -61,7 +61,8 @@
     "waiting": "Waiting…",
     "opponentsTurn": "{{name}}'s turn",
     "botPlayer": "computer player",
-    "holdingShield": "holding a shield"
+    "holdingShield": "holding a shield",
+    "away": "away"
   },
   "place": {
     "p1": "1st",

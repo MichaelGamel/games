@@ -65,7 +65,8 @@
     "waiting": "انتظار…",
     "opponentsTurn": "دور {{name}}",
     "botPlayer": "لاعب كمبيوتر",
-    "holdingShield": "يحمل درعًا"
+    "holdingShield": "يحمل درعًا",
+    "away": "غادر"
   },
   "place": {
     "p1": "الأول",

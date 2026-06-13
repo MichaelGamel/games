@@ -12,6 +12,8 @@ interface FourBoardProps {
   players: FourPlayer[]
   activeDrop: ActiveDrop | null
   winLine: Cell[] | null
+  /** How many of the winning discs are lit, for the one-by-one victory walk. */
+  winLitCount: number
   /** This client may pick a column right now. */
   canDrop: boolean
   onDrop: (column: number) => void
@@ -29,12 +31,15 @@ export const FourBoard = memo(function FourBoard({
   players,
   activeDrop,
   winLine,
+  winLitCount,
   canDrop,
   onDrop,
 }: FourBoardProps) {
   const { t } = useTranslation('four')
   const colorOf = (seat: number) => players[seat]?.color ?? '#94a3b8'
-  const winSet = new Set((winLine ?? []).map(([r, c]) => cellKey(r, c)))
+  // Only the discs revealed so far in the victory walk glow (winLitCount ramps
+  // 0 → winLine.length as each one lights up).
+  const winSet = new Set((winLine ?? []).slice(0, winLitCount).map(([r, c]) => cellKey(r, c)))
   const unitX = 100 / COLS
   const unitY = 100 / ROWS
 
@@ -137,16 +142,37 @@ function Disc({
   const unitX = 100 / COLS
   const unitY = 100 / ROWS
   return (
-    <div
-      className={cn('absolute rounded-full', highlight && 'animate-pulse ring-4 ring-white')}
+    <m.div
+      className="absolute rounded-full"
       style={{
         width: `${unitX * 0.82}%`,
         height: `${unitY * 0.82}%`,
         left: `${col * unitX + unitX * 0.09}%`,
         top: `${row * unitY + unitY * 0.09}%`,
         background: `radial-gradient(circle at 32% 28%, rgba(255,255,255,0.55), rgba(255,255,255,0) 45%), ${color}`,
-        boxShadow: 'inset 0 -2px 4px rgba(0,0,0,0.35)',
       }}
-    />
+      animate={
+        highlight
+          ? {
+              // A spring-y pop the instant the disc joins the line, settling
+              // into a steady glow + pulsing white ring.
+              scale: [1, 1.32, 1.12],
+              boxShadow: [
+                'inset 0 -2px 4px rgba(0,0,0,0.35)',
+                `inset 0 -2px 4px rgba(0,0,0,0.35), 0 0 0 4px rgba(255,255,255,0.95), 0 0 26px 10px ${color}`,
+                `inset 0 -2px 4px rgba(0,0,0,0.35), 0 0 0 3px rgba(255,255,255,0.85), 0 0 18px 6px ${color}`,
+              ],
+            }
+          : { scale: 1, boxShadow: 'inset 0 -2px 4px rgba(0,0,0,0.35)' }
+      }
+      transition={{ duration: highlight ? 0.55 : 0.2, ease: [0.34, 1.56, 0.64, 1] }}
+    >
+      {highlight && (
+        <span
+          aria-hidden="true"
+          className="absolute inset-0 rounded-full ring-2 ring-white/80 animate-pulse-ring"
+        />
+      )}
+    </m.div>
   )
 }

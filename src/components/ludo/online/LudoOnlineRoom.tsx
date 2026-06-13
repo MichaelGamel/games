@@ -175,6 +175,7 @@ export function LudoOnlineRoom({ code, role, profile, onLeave }: LudoOnlineRoomP
         online={{
           roomCode: code,
           everyonePresent: match.everyonePresent,
+          absentSeats: match.absentSeats,
           canPlay: match.canPlay,
           testMode: match.testMode,
           turnSecondsLeft: match.turnSecondsLeft,

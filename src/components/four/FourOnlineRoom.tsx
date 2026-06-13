@@ -134,6 +134,7 @@ export function FourOnlineRoom({ code, role, profile, onLeave }: FourOnlineRoomP
         online={{
           roomCode: code,
           everyonePresent: match.everyonePresent,
+          absentSeats: match.absentSeats,
           canPlay: match.canPlay,
           testMode: match.testMode,
           turnSecondsLeft: match.turnSecondsLeft,
@@ -154,7 +155,7 @@ export function FourOnlineRoom({ code, role, profile, onLeave }: FourOnlineRoomP
             secondaryLabel={t('common:actions.leave')}
           />
         )}
-        {game.phase === 'won' && !game.draw && game.standings.length > 0 && (
+        {game.phase === 'won' && !game.draw && !game.celebratingWin && game.standings.length > 0 && (
           <WinnerOverlay
             key="winner"
             standings={game.standings}

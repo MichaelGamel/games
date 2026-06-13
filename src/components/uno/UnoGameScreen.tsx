@@ -73,6 +73,7 @@ export function UnoGameScreen({ game, viewerSeat, secondaryLabel, onSecondary, o
           currentPlayerIndex={game.currentPlayerIndex}
           phase={game.phase}
           myId={myId}
+          absentIds={online?.absentSeats}
         />
       </div>
 
