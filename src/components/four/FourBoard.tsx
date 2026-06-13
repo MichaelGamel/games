@@ -37,9 +37,10 @@ export const FourBoard = memo(function FourBoard({
 }: FourBoardProps) {
   const { t } = useTranslation('four')
   const colorOf = (seat: number) => players[seat]?.color ?? '#94a3b8'
-  // Only the discs revealed so far in the victory walk glow (winLitCount ramps
-  // 0 → winLine.length as each one lights up).
-  const winSet = new Set((winLine ?? []).slice(0, winLitCount).map(([r, c]) => cellKey(r, c)))
+  // The winning discs revealed so far in the victory walk (winLitCount ramps
+  // 0 → winLine.length as each one lights up). Drawn in a layer *above* the
+  // rack so the glow isn't clipped by the board around each hole.
+  const litCells = (winLine ?? []).slice(0, winLitCount)
   const unitX = 100 / COLS
   const unitY = 100 / ROWS
 
@@ -50,13 +51,7 @@ export const FourBoard = memo(function FourBoard({
         {board.map((rowCells, row) =>
           rowCells.map((seat, col) =>
             seat === EMPTY ? null : (
-              <Disc
-                key={cellKey(row, col)}
-                row={row}
-                col={col}
-                color={colorOf(seat)}
-                highlight={winSet.has(cellKey(row, col))}
-              />
+              <Disc key={cellKey(row, col)} row={row} col={col} color={colorOf(seat)} />
             ),
           ),
         )}
@@ -98,6 +93,20 @@ export const FourBoard = memo(function FourBoard({
         ))}
       </div>
 
+      {/* victory walk: the winning discs re-drawn ON TOP of the rack, lighting
+          up one at a time, so the glow rings spill over the board instead of
+          being clipped behind it */}
+      <div className="pointer-events-none absolute inset-0">
+        {litCells.map(([row, col]) => (
+          <WinGlow
+            key={cellKey(row, col)}
+            row={row}
+            col={col}
+            color={colorOf(board[row]?.[col] ?? EMPTY)}
+          />
+        ))}
+      </div>
+
       {/* full-height column buttons */}
       <div className="absolute inset-0 grid" style={{ gridTemplateColumns: `repeat(${COLS}, 1fr)` }}>
         {Array.from({ length: COLS }, (_, col) => {
@@ -128,17 +137,30 @@ export const FourBoard = memo(function FourBoard({
   )
 })
 
-function Disc({
-  row,
-  col,
-  color,
-  highlight,
-}: {
-  row: number
-  col: number
-  color: string
-  highlight: boolean
-}) {
+function Disc({ row, col, color }: { row: number; col: number; color: string }) {
+  const unitX = 100 / COLS
+  const unitY = 100 / ROWS
+  return (
+    <div
+      className="absolute rounded-full"
+      style={{
+        width: `${unitX * 0.82}%`,
+        height: `${unitY * 0.82}%`,
+        left: `${col * unitX + unitX * 0.09}%`,
+        top: `${row * unitY + unitY * 0.09}%`,
+        background: `radial-gradient(circle at 32% 28%, rgba(255,255,255,0.55), rgba(255,255,255,0) 45%), ${color}`,
+        boxShadow: 'inset 0 -2px 4px rgba(0,0,0,0.35)',
+      }}
+    />
+  )
+}
+
+/**
+ * One winning disc, drawn on top of the rack as it joins the line: a spring-y
+ * pop into a glowing disc with a pulsing white ring. Mounted per cell as
+ * `winLitCount` ramps, so each lights up in turn with its own entrance.
+ */
+function WinGlow({ row, col, color }: { row: number; col: number; color: string }) {
   const unitX = 100 / COLS
   const unitY = 100 / ROWS
   return (
@@ -149,30 +171,24 @@ function Disc({
         height: `${unitY * 0.82}%`,
         left: `${col * unitX + unitX * 0.09}%`,
         top: `${row * unitY + unitY * 0.09}%`,
-        background: `radial-gradient(circle at 32% 28%, rgba(255,255,255,0.55), rgba(255,255,255,0) 45%), ${color}`,
+        background: `radial-gradient(circle at 32% 28%, rgba(255,255,255,0.6), rgba(255,255,255,0) 45%), ${color}`,
       }}
-      animate={
-        highlight
-          ? {
-              // A spring-y pop the instant the disc joins the line, settling
-              // into a steady glow + pulsing white ring.
-              scale: [1, 1.32, 1.12],
-              boxShadow: [
-                'inset 0 -2px 4px rgba(0,0,0,0.35)',
-                `inset 0 -2px 4px rgba(0,0,0,0.35), 0 0 0 4px rgba(255,255,255,0.95), 0 0 26px 10px ${color}`,
-                `inset 0 -2px 4px rgba(0,0,0,0.35), 0 0 0 3px rgba(255,255,255,0.85), 0 0 18px 6px ${color}`,
-              ],
-            }
-          : { scale: 1, boxShadow: 'inset 0 -2px 4px rgba(0,0,0,0.35)' }
-      }
-      transition={{ duration: highlight ? 0.55 : 0.2, ease: [0.34, 1.56, 0.64, 1] }}
+      initial={{ scale: 0.85, opacity: 0 }}
+      animate={{
+        scale: [0.85, 1.35, 1.12],
+        opacity: 1,
+        boxShadow: [
+          '0 0 0 0 rgba(255,255,255,0)',
+          `0 0 0 5px rgba(255,255,255,0.95), 0 0 32px 14px ${color}`,
+          `0 0 0 3px rgba(255,255,255,0.85), 0 0 22px 8px ${color}`,
+        ],
+      }}
+      transition={{ duration: 0.55, ease: [0.34, 1.56, 0.64, 1] }}
     >
-      {highlight && (
-        <span
-          aria-hidden="true"
-          className="absolute inset-0 rounded-full ring-2 ring-white/80 animate-pulse-ring"
-        />
-      )}
+      <span
+        aria-hidden="true"
+        className="absolute inset-0 rounded-full ring-2 ring-white/80 animate-pulse-ring"
+      />
     </m.div>
   )
 }
