@@ -78,7 +78,7 @@ const property = (
 }
 
 /**
- * The board, matching the physical "بنك الحظا" board (best-effort transcription
+ * The board, matching the physical "بنك الحظ" board (best-effort transcription
  * of the user's photo — correct names/prices/colors here). Start (البداية) is
  * bottom-left (index 0); play runs clockwise. Corners: 0 Start, 10 Go-To-Jail
  * (اذهب إلى السجن), 20 Free Parking (استراحة), 30 Jail (السجن). Two card kinds —

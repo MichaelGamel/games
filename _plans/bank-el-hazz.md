@@ -62,7 +62,7 @@ El-Hazz adds two things the others don't have together:
    Phase 1 (matching every other game). Phase 7 only *polishes* the Egyptian theme + RTL board feel.
 3. **This is the full-roadmap doc.** Phase 1 is executable in depth; Phases 2–8 are scoped.
 
-### Phase 1 board revision — match the physical "بنك الحظا" board
+### Phase 1 board revision — match the physical "بنك الحظ" board
 
 After Phase 1 shipped, the board was redesigned to match a real Egyptian *Bank
 El-Hazz* board (photo provided by the user). The mechanics/architecture are
