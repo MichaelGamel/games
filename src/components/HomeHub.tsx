@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Backdrop } from './Backdrop'
 import { LudoBoardIcon } from './ludo/LudoBoardIcon'
+import { XOBoardIcon } from './xo/XOBoardIcon'
 import { useDocumentMeta } from '../lib/useDocumentMeta'
 import { hallOfFame, type HallOfFameRow } from '../lib/stats'
 import { placeMedal } from '../lib/place'
@@ -42,7 +43,7 @@ const grid = {
 }
 
 export function HomeHub() {
-  const { t } = useTranslation(['common', 'snakes', 'ludo', 'four', 'uno', 'bank'])
+  const { t } = useTranslation(['common', 'snakes', 'ludo', 'four', 'uno', 'bank', 'xo'])
   useDocumentMeta({
     title: t('common:hub.metaTitle'),
     description: t('common:hub.metaDescription'),
@@ -89,6 +90,14 @@ export function HomeHub() {
       to: '/bank',
       accent: 'from-amber-500/30 via-transparent to-emerald-400/25',
     },
+    {
+      id: 'xo',
+      title: t('xo:title'),
+      tagline: t('xo:hubTagline'),
+      icon: <XOBoardIcon className="h-16 w-16 drop-shadow" />,
+      to: '/xo',
+      accent: 'from-rose-500/30 via-transparent to-sky-400/25',
+    },
   ]
 
   return (
@@ -113,7 +122,7 @@ export function HomeHub() {
 
         <m.ul
           variants={grid}
-          className="grid w-full max-w-3xl list-none grid-cols-2 gap-4 sm:gap-5"
+          className="grid w-full max-w-5xl list-none grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-5"
         >
           {games.map((game) => (
             <GameCard key={game.id} game={game} />

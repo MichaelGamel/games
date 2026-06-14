@@ -1,0 +1,24 @@
+{
+  "title": "Tic-Tac-Toe",
+  "tagline": "Three in a row wins. X and O, head to head.",
+  "hubTagline": "Get three in a row — X and O, head to head.",
+  "setupSubtitle": "Head to head. First to three in a row wins.",
+  "menu": {
+    "localSubtitle": "Two players, one screen — or take on the computer.",
+    "onlineSubtitle": "Create or join a room and play a friend on another computer."
+  },
+  "cellAria": "Mark row {{row}}, column {{col}}",
+  "status": {
+    "places": "{{name}} makes a mark…",
+    "yourTurn": "Your turn — pick a square.",
+    "waitingFor": "Waiting for {{name}}…",
+    "turnPick": "{{name}}'s turn — pick a square.",
+    "draw": "It's a draw — the board is full!",
+    "wins": "{{name}} gets three in a row and wins!"
+  },
+  "draw": {
+    "body": "The board filled up with nobody getting three in a row."
+  },
+  "metaTitle": "Tic-Tac-Toe — Robin's Games",
+  "metaDescription": "Tic-Tac-Toe on Robin's Games — mark your squares, block your rival, and get three in a row. Play head-to-head on one screen, against the computer, or online in real time."
+}

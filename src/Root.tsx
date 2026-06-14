@@ -20,6 +20,9 @@ const UnoApp = lazy(() =>
 const BankApp = lazy(() =>
   import('./components/bank/BankApp').then((m) => ({ default: m.BankApp })),
 )
+const XOApp = lazy(() =>
+  import('./components/xo/XOApp').then((m) => ({ default: m.XOApp })),
+)
 
 function RouteFallback() {
   const { t } = useTranslation()
@@ -78,6 +81,14 @@ export function Root() {
             element={
               <Suspense fallback={<RouteFallback />}>
                 <BankApp />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/xo"
+            element={
+              <Suspense fallback={<RouteFallback />}>
+                <XOApp />
               </Suspense>
             }
           />
