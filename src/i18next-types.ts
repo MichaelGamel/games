@@ -7,6 +7,7 @@ type SnakesResources = typeof import('./locales/en/snakes.json')
 type LudoResources = typeof import('./locales/en/ludo.json')
 type FourResources = typeof import('./locales/en/four.json')
 type UnoResources = typeof import('./locales/en/uno.json')
+type BankResources = typeof import('./locales/en/bank.json')
 
 declare module 'i18next' {
   interface CustomTypeOptions {
@@ -18,6 +19,7 @@ declare module 'i18next' {
       ludo: LudoResources
       four: FourResources
       uno: UnoResources
+      bank: BankResources
     }
   }
 }

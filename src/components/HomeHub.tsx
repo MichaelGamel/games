@@ -42,7 +42,7 @@ const grid = {
 }
 
 export function HomeHub() {
-  const { t } = useTranslation(['common', 'snakes', 'ludo', 'four', 'uno'])
+  const { t } = useTranslation(['common', 'snakes', 'ludo', 'four', 'uno', 'bank'])
   useDocumentMeta({
     title: t('common:hub.metaTitle'),
     description: t('common:hub.metaDescription'),
@@ -80,6 +80,14 @@ export function HomeHub() {
       emoji: '🃏',
       to: '/uno',
       accent: 'from-red-500/30 via-transparent to-yellow-400/25',
+    },
+    {
+      id: 'bank',
+      title: t('bank:title'),
+      tagline: t('bank:tagline'),
+      emoji: '🏦',
+      to: '/bank',
+      accent: 'from-amber-500/30 via-transparent to-emerald-400/25',
     },
   ]
 

@@ -279,6 +279,67 @@ export class SoundEngine {
     this.blip(f * 2, 0.03, 0.18, 'sine', 0.12) // shimmer an octave up
   }
 
+  // ---- Bank El-Hazz -------------------------------------------------------
+  // (Rolls/steps reuse `playRoll`/`playStep`; jail-skip reuses `playSkip`.)
+
+  /** Bright cascade of coin clinks for a cash gain (rent, reward, collect). */
+  playCoins(): void {
+    if (this.muted || !this.ensure()) return
+    const notes = [1318.51, 1567.98, 2093, 2637] // E6 G6 C7 E7
+    notes.forEach((f, i) => this.blip(f, i * 0.05, 0.1, 'triangle', 0.16))
+  }
+
+  /** Two-note rising chime when a player passes Start and collects the reward. */
+  playPassStart(): void {
+    if (this.muted || !this.ensure()) return
+    this.blip(659.25, 0, 0.18, 'triangle', 0.24) // E5
+    this.blip(987.77, 0.14, 0.28, 'triangle', 0.26) // B5
+  }
+
+  /** Mystical shimmer as a luck card is drawn. */
+  playLuckDraw(): void {
+    if (this.muted || !this.ensure()) return
+    const notes = [587.33, 880, 1174.66, 1760] // D5 A5 D6 A6
+    notes.forEach((f, i) => this.blip(f, i * 0.06, 0.16, 'sine', 0.18))
+    this.blip(2349.32, 0.3, 0.2, 'sine', 0.12) // D7 sparkle
+  }
+
+  /** Cha-ching + stamp as a property is purchased. */
+  playBuy(): void {
+    if (this.muted || !this.ensure()) return
+    this.blip(880, 0, 0.1, 'square', 0.2) // ching…
+    this.blip(1318.51, 0.08, 0.16, 'triangle', 0.24) // …ching!
+    this.blip(196, 0.2, 0.12, 'square', 0.26) // stamp thud
+  }
+
+  /** Heavy metallic clang of the jail gate. */
+  playJail(): void {
+    if (this.muted || !this.ensure()) return
+    this.blip(196, 0, 0.18, 'square', 0.3) // G3 gate slam
+    this.blip(146.83, 0.05, 0.3, 'sawtooth', 0.22) // D3 reverberation
+    this.blip(392, 0.04, 0.24, 'triangle', 0.14) // metallic ring
+  }
+
+  /** Descending sad glissando as a player goes bankrupt. */
+  playBankrupt(): void {
+    if (this.muted || !this.ensure()) return
+    const ctx = this.ctx
+    const master = this.master
+    if (!ctx || !master) return
+    const t0 = ctx.currentTime
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.type = 'sawtooth'
+    osc.frequency.setValueAtTime(440, t0)
+    osc.frequency.exponentialRampToValueAtTime(98, t0 + 0.7) // A4 → G2
+    gain.gain.setValueAtTime(0.0001, t0)
+    gain.gain.exponentialRampToValueAtTime(0.24, t0 + 0.04)
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.8)
+    osc.connect(gain).connect(master)
+    osc.start(t0)
+    osc.stop(t0 + 0.85)
+  }
+
   /** Victory fanfare. */
   playWin(): void {
     if (this.muted || !this.ensure()) return

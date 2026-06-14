@@ -17,6 +17,9 @@ const FourApp = lazy(() =>
 const UnoApp = lazy(() =>
   import('./components/uno/UnoApp').then((m) => ({ default: m.UnoApp })),
 )
+const BankApp = lazy(() =>
+  import('./components/bank/BankApp').then((m) => ({ default: m.BankApp })),
+)
 
 function RouteFallback() {
   const { t } = useTranslation()
@@ -67,6 +70,14 @@ export function Root() {
             element={
               <Suspense fallback={<RouteFallback />}>
                 <UnoApp />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/bank"
+            element={
+              <Suspense fallback={<RouteFallback />}>
+                <BankApp />
               </Suspense>
             }
           />
