@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import type { UnoController } from '../../hooks/useUno'
 import { RoomBadge, type OnlineMeta } from '../online/RoomBadge'
+import { LanguageSwitcher } from '../LanguageSwitcher'
 import { UnoPlayerPanel } from './UnoPlayerPanel'
 import { UnoControls } from './UnoControls'
 import { UnoCallButton } from './UnoCallButton'
@@ -55,6 +56,8 @@ export function UnoGameScreen({ game, viewerSeat, secondaryLabel, onSecondary, o
       exit={{ opacity: 0 }}
       className="relative z-10 mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-3 px-3 pb-3 pt-3 lg:px-4 lg:py-6"
     >
+      <LanguageSwitcher compact className="fixed end-3 top-3 z-30" />
+
       <header className="shrink-0 text-center">
         <h1 className="text-lg font-bold tracking-tight text-white drop-shadow sm:text-2xl">
           <span aria-hidden="true">🃏</span> {t('uno:title')}

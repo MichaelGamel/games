@@ -8,6 +8,7 @@ import { Board } from './board/Board'
 import { PlayerPanel } from './PlayerPanel'
 import { Controls } from './Controls'
 import { RoomBadge, type OnlineMeta } from './online/RoomBadge'
+import { LanguageSwitcher } from './LanguageSwitcher'
 import { cn } from '../lib/cn'
 
 export type { OnlineMeta }
@@ -54,6 +55,8 @@ export function GameScreen({ game, online }: GameScreenProps) {
         'lg:grid lg:h-auto lg:min-h-screen lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)] lg:content-center lg:items-center lg:gap-x-10 lg:gap-y-4 lg:px-4 lg:py-8',
       )}
     >
+      <LanguageSwitcher compact className="fixed end-3 top-3 z-30" />
+
       <header className="shrink-0 text-center lg:col-start-2">
         <h1 className="text-lg font-bold tracking-tight text-white drop-shadow sm:text-2xl lg:text-3xl">
           <span aria-hidden="true">🐍</span> {t('snakes:title')} <span aria-hidden="true">🪜</span>

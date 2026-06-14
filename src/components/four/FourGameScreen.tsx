@@ -5,6 +5,7 @@ import type { TFunction } from 'i18next'
 import type { FourController } from '../../hooks/useConnectFour'
 import { FourBoard } from './FourBoard'
 import { RoomBadge, type OnlineMeta } from '../online/RoomBadge'
+import { LanguageSwitcher } from '../LanguageSwitcher'
 import { cn } from '../../lib/cn'
 
 interface FourGameScreenProps {
@@ -30,6 +31,8 @@ export function FourGameScreen({ game, online }: FourGameScreenProps) {
       exit={{ opacity: 0 }}
       className="relative z-10 mx-auto flex min-h-dvh w-full max-w-2xl flex-col items-center justify-center gap-4 px-3 py-6"
     >
+      <LanguageSwitcher compact className="fixed end-3 top-3 z-30" />
+
       <header className="text-center">
         <h1 className="text-2xl font-bold tracking-tight text-white drop-shadow sm:text-3xl">
           <span aria-hidden="true">🔴</span> {t('four:title')} <span aria-hidden="true">🟡</span>

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { AnimatePresence, m } from 'motion/react'
 import { useTranslation } from 'react-i18next'
 import { BackToHubLink } from '../BackToHubLink'
+import { LanguageSwitcher } from '../LanguageSwitcher'
 import { RoomBadge, type OnlineMeta } from '../online/RoomBadge'
 import { useRollHotkey } from '../../hooks/useRollHotkey'
 import type { BankController } from '../../hooks/useBankElHazz'
@@ -54,6 +55,7 @@ export function BankGameScreen({ game, onNewGame, online }: BankGameScreenProps)
   return (
     <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-4 px-3 py-14 lg:py-6">
       <BackToHubLink />
+      <LanguageSwitcher compact className="fixed end-3 top-3 z-30" />
 
       {online && (
         <header className="shrink-0 text-center">

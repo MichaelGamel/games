@@ -11,6 +11,7 @@ import { AnimatePresence, m } from 'motion/react'
 import { useTranslation } from 'react-i18next'
 import { MAX_PLAYERS, MIN_PLAYERS, type RejectReason } from '../../net/roster'
 import type { RoomMember, RoomStatus, Role } from '../../net/types'
+import { LanguageSwitcher } from '../LanguageSwitcher'
 import { cn } from '../../lib/cn'
 
 /** Transient join/leave/skip announcements, stacked top-center. */
@@ -178,6 +179,7 @@ export function WaitingRoom({
       >
         ← {t('online:waiting.leave')}
       </button>
+      <LanguageSwitcher compact className="absolute right-4 top-4 z-20" />
 
       <div className="w-full max-w-md rounded-2xl bg-white/5 p-8 text-center ring-1 ring-white/10 backdrop-blur">
         {status === 'error' ? (
