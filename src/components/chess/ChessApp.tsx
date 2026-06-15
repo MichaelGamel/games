@@ -14,6 +14,7 @@ import { LanguageSwitcher } from '../LanguageSwitcher'
 import { useDocumentMeta } from '../../lib/useDocumentMeta'
 import { isSupabaseConfigured } from '../../net/config'
 import { cn } from '../../lib/cn'
+import { CHESS_PIECE_COLORS, DEFAULT_PIECE_COLORS } from '../../chess/config'
 import type { Difficulty } from '../../chess/types'
 import { ChessIcon } from './ChessIcon'
 import { ChessGame } from './ChessGame'
@@ -46,6 +47,10 @@ export function ChessApp() {
   const [view, setView] = useState<View>(
     initialRoomCode && onlineEnabled ? { screen: 'online' } : { screen: 'menu' },
   )
+  // Chosen piece colours for local play (White moves first). Online players pick
+  // their own colour in the lobby instead.
+  const [whiteColor, setWhiteColor] = useState<string>(DEFAULT_PIECE_COLORS.white)
+  const [blackColor, setBlackColor] = useState<string>(DEFAULT_PIECE_COLORS.black)
   useDocumentMeta({
     title: t('chess:metaTitle'),
     description: t('chess:metaDescription'),
@@ -59,6 +64,8 @@ export function ChessApp() {
             key="local"
             mode={view.mode}
             difficulty={view.difficulty}
+            whiteColor={whiteColor}
+            blackColor={blackColor}
             onExit={() => setView({ screen: 'menu' })}
           />
         )}
@@ -102,6 +109,34 @@ export function ChessApp() {
               </h1>
               <p className="mt-3 text-white/70">{t('chess:tagline')}</p>
             </m.header>
+
+            {/* Piece colours — chosen before starting; default classic White vs Black. */}
+            <m.div
+              variants={item}
+              className="w-full max-w-2xl rounded-3xl bg-white/5 p-5 ring-1 ring-white/10 backdrop-blur"
+            >
+              <p className="mb-3 text-center text-xs font-semibold uppercase tracking-widest text-violet-200">
+                {t('chess:menu.pieceColors')}
+              </p>
+              <div className="flex flex-col gap-3 sm:flex-row sm:justify-center sm:gap-10">
+                <PieceColorRow
+                  label={t('chess:side.white')}
+                  value={whiteColor}
+                  onPick={(v) => {
+                    if (v === blackColor) setBlackColor(whiteColor)
+                    setWhiteColor(v)
+                  }}
+                />
+                <PieceColorRow
+                  label={t('chess:side.black')}
+                  value={blackColor}
+                  onPick={(v) => {
+                    if (v === whiteColor) setWhiteColor(blackColor)
+                    setBlackColor(v)
+                  }}
+                />
+              </div>
+            </m.div>
 
             <div className="grid w-full max-w-2xl gap-4 sm:grid-cols-2">
               {/* Vs Computer — pick a level to start. */}
@@ -192,5 +227,41 @@ export function ChessApp() {
         )}
       </AnimatePresence>
     </Backdrop>
+  )
+}
+
+/** One army's colour chooser: a label and a row of selectable swatches. */
+function PieceColorRow({
+  label,
+  value,
+  onPick,
+}: {
+  label: string
+  value: string
+  onPick: (value: string) => void
+}) {
+  return (
+    <div className="flex items-center justify-center gap-3">
+      <span className="w-12 shrink-0 text-sm font-semibold text-white/70">{label}</span>
+      <div className="flex flex-wrap gap-2">
+        {CHESS_PIECE_COLORS.map((c) => {
+          const selected = c.value === value
+          return (
+            <button
+              key={c.value}
+              type="button"
+              onClick={() => onPick(c.value)}
+              aria-label={c.name}
+              aria-pressed={selected}
+              className={cn(
+                'h-8 w-8 rounded-full ring-2 ring-offset-2 ring-offset-night-800 transition',
+                selected ? 'scale-110 ring-white' : 'ring-white/15 hover:scale-105',
+              )}
+              style={{ background: c.value }}
+            />
+          )
+        })}
+      </div>
+    </div>
   )
 }

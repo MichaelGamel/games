@@ -4,7 +4,7 @@
  */
 import { useState } from 'react'
 import { OnlineLobby, type LobbyDraft, type RoomParams } from '../online/OnlineLobby'
-import { CHESS_COLORS } from '../../chess/config'
+import { CHESS_PIECE_COLORS } from '../../chess/config'
 import { ChessOnlineRoom } from './ChessOnlineRoom'
 
 interface ChessOnlineGameProps {
@@ -24,7 +24,7 @@ export function ChessOnlineGame({ onExit, initialRoomCode }: ChessOnlineGameProp
         onBack={onExit}
         initial={draft}
         initialCode={initialRoomCode}
-        colors={CHESS_COLORS}
+        colors={CHESS_PIECE_COLORS}
         onStart={(next, nextDraft) => {
           setDraft(nextDraft)
           setParams(next)

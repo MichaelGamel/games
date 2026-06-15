@@ -7,21 +7,29 @@
  */
 import * as THREE from 'three'
 import { PALETTE } from '../config'
-import type { PieceColor } from '../types'
 
-export function pieceMaterial(color: PieceColor): THREE.MeshPhysicalMaterial {
-  const white = color === 'w'
+/**
+ * A polished piece material in any colour. Light colours get a pearl finish
+ * (soft, warm sheen); dark/saturated colours get a glossy, slightly metallic
+ * onyx finish. The base emissive is a dim tint of the colour itself, so the
+ * piece glows in its own hue (the scene overrides it red for a king in check).
+ */
+export function pieceMaterial(value: THREE.ColorRepresentation): THREE.MeshPhysicalMaterial {
+  const color = new THREE.Color(value)
+  // Perceptual-ish luminance (the Color channels are already linearised).
+  const lum = 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b
+  const light = lum > 0.3
   return new THREE.MeshPhysicalMaterial({
-    color: white ? PALETTE.whitePiece : PALETTE.blackPiece,
-    roughness: white ? 0.45 : 0.3,
-    metalness: white ? 0.05 : 0.45,
-    clearcoat: white ? 0.5 : 0.9,
-    clearcoatRoughness: white ? 0.4 : 0.25,
-    emissive: new THREE.Color(white ? PALETTE.whiteEmissive : PALETTE.blackEmissive),
-    emissiveIntensity: white ? 0.16 : 0.35,
+    color,
+    roughness: light ? 0.45 : 0.34,
+    metalness: light ? 0.06 : 0.42,
+    clearcoat: light ? 0.5 : 0.85,
+    clearcoatRoughness: light ? 0.4 : 0.26,
+    emissive: color.clone().multiplyScalar(0.5),
+    emissiveIntensity: light ? 0.1 : 0.28,
     sheen: 0.5,
     sheenRoughness: 0.5,
-    sheenColor: new THREE.Color(white ? 0xfff4d8 : PALETTE.rimViolet),
+    sheenColor: light ? new THREE.Color(0xfff4d8) : color.clone(),
   })
 }
 

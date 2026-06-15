@@ -79,14 +79,27 @@ export interface ColorOption {
   value: string
 }
 
-/** Token colours offered in the online lobby (cosmetic — the chess side a
- *  player gets is decided by seat, not by this colour). */
-export const CHESS_COLORS: readonly ColorOption[] = [
-  { name: 'Amethyst', value: '#a855f7' },
-  { name: 'Cyan', value: '#38d6ff' },
-  { name: 'Amber', value: '#f59e0b' },
-  { name: 'Rose', value: '#f43f5e' },
+/**
+ * Piece colours a player may choose for their army. The first two — true ivory
+ * White and onyx Black — are the classic default; the rest are fun alternatives.
+ * Online: each player picks one in the lobby (it colours their side's pieces).
+ * Local: chosen on the menu before starting.
+ */
+export const CHESS_PIECE_COLORS: readonly ColorOption[] = [
+  { name: 'White', value: '#ece6d8' },
+  { name: 'Black', value: '#1c1a24' },
+  { name: 'Amethyst', value: '#7c3aed' },
+  { name: 'Cyan', value: '#22b8e6' },
+  { name: 'Amber', value: '#e0962e' },
+  { name: 'Rose', value: '#e0405e' },
+  { name: 'Emerald', value: '#22a06b' },
 ]
+
+/** Classic default: White (seat 0, moves first) vs Black (seat 1). */
+export const DEFAULT_PIECE_COLORS = {
+  white: CHESS_PIECE_COLORS[0].value,
+  black: CHESS_PIECE_COLORS[1].value,
+} as const
 
 /** Centipawn material values, also used for the captured-tray advantage count. */
 export const PIECE_VALUE: Record<string, number> = {

@@ -18,7 +18,7 @@ import { ChessEngine } from '../chess/engine'
 import { chooseMove } from '../chess/ai'
 import { chessAudio } from '../chess/audio'
 import { ChessScene } from '../chess/three/ChessScene'
-import { PIECE_VALUE, TIMING } from '../chess/config'
+import { DEFAULT_PIECE_COLORS, PIECE_VALUE, TIMING } from '../chess/config'
 import { createTurnSequencer } from '../lib/turnSequencer'
 import type { MatchDecision } from '../game/types'
 import type {
@@ -376,6 +376,10 @@ export function useChessGame(opts: UseChessGameOptions): ChessController {
       setFen(engine.fen())
       phaseRef.current = 'idle'
       setPhase('idle')
+      sceneRef.current?.setColors(
+        setup[0]?.color ?? DEFAULT_PIECE_COLORS.white,
+        setup[1]?.color ?? DEFAULT_PIECE_COLORS.black,
+      )
       sceneRef.current?.setPlacements(engine.placements())
       sceneRef.current?.setCheck(null)
     },
@@ -451,6 +455,10 @@ export function useChessGame(opts: UseChessGameOptions): ChessController {
       setOutcome(status.outcome ?? null)
       phaseRef.current = snap.ended ? 'won' : 'idle'
       setPhase(snap.ended ? 'won' : 'idle')
+      sceneRef.current?.setColors(
+        snap.players[0]?.color ?? DEFAULT_PIECE_COLORS.white,
+        snap.players[1]?.color ?? DEFAULT_PIECE_COLORS.black,
+      )
       sceneRef.current?.setPlacements(engine.placements())
       sceneRef.current?.setCheck(status.checkSquare ?? null)
     },
@@ -551,6 +559,11 @@ export function useChessGame(opts: UseChessGameOptions): ChessController {
       if (node) {
         const scene = new ChessScene(node, { onSquareTap: (sq) => tapRef.current(sq) })
         sceneRef.current = scene
+        const ps = playersRef.current
+        scene.setColors(
+          ps[0]?.color ?? DEFAULT_PIECE_COLORS.white,
+          ps[1]?.color ?? DEFAULT_PIECE_COLORS.black,
+        )
         scene.setPlacements(engine.placements())
         scene.setAutoRotate(autoRotateRef.current)
         scene.setFlipped(flippedRef.current)

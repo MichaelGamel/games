@@ -14,7 +14,7 @@
  */
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { DIMS, PALETTE, TIMING } from '../config'
+import { DEFAULT_PIECE_COLORS, DIMS, PALETTE, TIMING } from '../config'
 import type { MoveAnimation, PieceColor, PiecePlacement, PieceType, Square } from '../types'
 import { buildPieceMeshes } from './pieceGeometry'
 import { frameMaterial, glowMaterial, pieceMaterial, tileMaterial } from './materials'
@@ -78,6 +78,9 @@ export class ChessScene {
   private celebrating = false
   /** Idle camera auto-orbit. Off by default — opt-in via {@link setAutoRotate}. */
   private autoRotateEnabled = false
+  /** Per-army piece colours (White = seat 0, Black = seat 1). */
+  private whiteColor: THREE.ColorRepresentation = DEFAULT_PIECE_COLORS.white
+  private blackColor: THREE.ColorRepresentation = DEFAULT_PIECE_COLORS.black
   private time = 0
   private lastInteract = 0
   private raf = 0
@@ -380,6 +383,25 @@ export class ChessScene {
     )
   }
 
+  /** Recolour the two armies (White = seat 0, Black = seat 1). */
+  setColors(white: THREE.ColorRepresentation, black: THREE.ColorRepresentation) {
+    this.whiteColor = white
+    this.blackColor = black
+    for (const piece of this.pieces.values()) {
+      const next = pieceMaterial(piece.color === 'w' ? white : black)
+      piece.group.traverse((o) => {
+        const mesh = o as THREE.Mesh
+        if (mesh.isMesh) mesh.material = next
+      })
+      piece.material.dispose()
+      piece.material = next
+      piece.baseEmissive = next.emissive.clone()
+      piece.baseEmissiveIntensity = next.emissiveIntensity
+    }
+    // Keep a king-in-check glowing red after a recolour.
+    if (this.checkPiece) this.checkPiece.material.emissive.set(PALETTE.check)
+  }
+
   /** Toggle the idle camera auto-orbit (off by default). */
   setAutoRotate(enabled: boolean) {
     this.autoRotateEnabled = enabled
@@ -455,7 +477,7 @@ export class ChessScene {
   // ---- piece + animation internals ---------------------------------------
 
   private addPiece(p: PiecePlacement) {
-    const material = pieceMaterial(p.color)
+    const material = pieceMaterial(p.color === 'w' ? this.whiteColor : this.blackColor)
     const group = new THREE.Group()
     for (const mesh of buildPieceMeshes(p.type, material)) group.add(mesh)
     group.scale.setScalar(DIMS.pieceScale)
