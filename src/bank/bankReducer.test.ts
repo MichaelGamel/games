@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { bankReducer, initialBankState, type BankAction, type PlayerSetup } from './bankReducer'
-import { DEFAULT_BANK_RULES } from './config'
+import { DEFAULT_BANK_RULES, JAIL_TILE } from './config'
 import type { BankGameState, BankTurnResolution } from './types'
 
 const PLAYERS: PlayerSetup[] = [
@@ -338,7 +338,7 @@ describe('bankReducer — richer jail effects (P2)', () => {
     winnerId: null,
   })
 
-  it('a jail effect sets three escape attempts and parks at tile 30', () => {
+  it('a jail effect sets three escape attempts and parks at the Jail corner', () => {
     const base = start([PLAYERS[0], PLAYERS[1]])
     const s = commit(base, {
       type: 'roll',
@@ -346,13 +346,13 @@ describe('bankReducer — richer jail effects (P2)', () => {
       seat: 0,
       dice: [3, 4],
       effects: [{ kind: 'move', from: 0, to: 7, path: [], passedStart: false }, { kind: 'jail', seat: 0 }],
-      finalTile: 30,
+      finalTile: JAIL_TILE,
       buyOption: null,
       isWin: false,
       winnerId: null,
     })
     expect(s.players[0].jailTurns).toBe(3)
-    expect(s.players[0].position).toBe(30)
+    expect(s.players[0].position).toBe(JAIL_TILE)
   })
 
   it('jailStay decrements the attempts and passes the turn', () => {

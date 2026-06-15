@@ -49,7 +49,7 @@ import {
   rollDice,
   type TradeOffer,
 } from '../bank/rules'
-import { asBankRules, TIMING } from '../bank/config'
+import { asBankRules, JAIL_TILE, TIMING } from '../bank/config'
 import type { BankGameState, BankRules, BankTurnResolution, CardDeck, CardId } from '../bank/types'
 import { createTurnSequencer, type SequencerHandlers } from '../lib/turnSequencer'
 import type { MatchLog } from '../lib/matchLog'
@@ -70,6 +70,12 @@ export interface BankCardReveal {
   seat: number
   deck: CardDeck
   cardId: CardId
+  /** The drawer's balance before the card's direct cash effect. */
+  balanceBefore: number
+  /** The signed cash change the card applied (0 for non-money cards). */
+  delta: number
+  /** The drawer's balance after the card resolved. */
+  balanceAfter: number
 }
 
 export interface BankNetHooks {
@@ -119,6 +125,21 @@ export function useBankElHazz({ controlsPlayer = 'all', hooks }: UseBankOptions 
   const rollFlash = useFlash<{ reason: 'doubles' | 'fastBus' | 'usedFastBus' }>()
   const { sound, muted, toggleMute } = useSound()
   const reduced = useReducedMotion()
+
+  // A one-shot acknowledge gate for the Luck/Court card popup. `executeTurn`
+  // parks on `waitForCardAck()` while a card is shown; the modal's Confirm
+  // button calls `acknowledgeCard` to resume. `clearTransients` flushes any
+  // pending gate so a cancelled run (reset/undo/new game) never hangs.
+  const ackRef = useRef<(() => void) | null>(null)
+  const waitForCardAck = useCallback(
+    () => new Promise<void>((resolve) => { ackRef.current = resolve }),
+    [],
+  )
+  const acknowledgeCard = useCallback(() => {
+    const resolve = ackRef.current
+    ackRef.current = null
+    resolve?.()
+  }, [])
 
   // Latest-value refs, synced after each commit. Every consumer reads them from
   // event handlers or async continuations — never during render.
@@ -259,8 +280,17 @@ export function useBankElHazz({ controlsPlayer = 'all', hooks }: UseBankOptions 
             break
           case 'card':
             sound.playLuckDraw()
-            setCardReveal({ seat, deck: effect.deck, cardId: effect.cardId })
-            await delay(timings.luck)
+            setCardReveal({
+              seat,
+              deck: effect.deck,
+              cardId: effect.cardId,
+              balanceBefore: effect.balanceBefore ?? 0,
+              delta: effect.delta ?? 0,
+              balanceAfter: effect.balanceAfter ?? 0,
+            })
+            // Hold until the player taps Confirm (no auto-dismiss). The pause
+            // keeps `phase === 'moving'`, so the bot driver waits too.
+            await waitForCardAck()
             if (!alive()) return
             break
           case 'cash':
@@ -283,7 +313,7 @@ export function useBankElHazz({ controlsPlayer = 'all', hooks }: UseBankOptions 
             if (!alive()) return
             break
           case 'jail':
-            setActiveMove({ seat: effect.seat, tile: 30 })
+            setActiveMove({ seat: effect.seat, tile: JAIL_TILE })
             sound.playJail()
             await delay(timings.jail)
             if (!alive()) return
@@ -334,7 +364,7 @@ export function useBankElHazz({ controlsPlayer = 'all', hooks }: UseBankOptions 
         rollFlash.trigger(seat, 1500, { reason: 'doubles' })
       }
     },
-    [sound, timings, cashFlash, skipFlash, rollFlash, commitResolution],
+    [sound, timings, cashFlash, skipFlash, rollFlash, commitResolution, waitForCardAck],
   )
 
   /** Hand the turn to the next active player because the current one left (P6). */
@@ -550,6 +580,9 @@ export function useBankElHazz({ controlsPlayer = 'all', hooks }: UseBankOptions 
     cashFlash.clear()
     skipFlash.clear()
     rollFlash.clear()
+    // Release a pending card-confirm gate so a cancelled run never hangs.
+    ackRef.current?.()
+    ackRef.current = null
   }, [cashFlash, skipFlash, rollFlash])
 
   const startGame = useCallback(
@@ -724,6 +757,8 @@ export function useBankElHazz({ controlsPlayer = 'all', hooks }: UseBankOptions 
     roll,
     decideBuy,
     decideDecline,
+    /** Dismiss the Luck/Court card popup (resumes the paused turn). */
+    acknowledgeCard,
     // P3/P4 property management.
     canManageProperties,
     canOpenTrade,

@@ -36,36 +36,32 @@ export type TileKind =
  * same trick UNO uses for `colors.${color}`.
  */
 export type BankTileNameKey =
-  // corners + card/tax labels
+  // corners + card labels
   | 'start'
   | 'jail'
   | 'luckyClub'
   | 'fastBus'
   | 'luck'
   | 'court'
-  | 'incomeTax'
-  | 'salesTax'
-  // utilities
-  | 'suezCanal'
-  | 'banqueMisr'
-  | 'petrolStation'
-  | 'cairoHospital'
-  // cities
-  | 'damascus'
+  // the lone petrol utility
+  | 'gasStation'
+  // cities (in board order)
+  | 'alquds'
+  | 'gaza'
   | 'beirut'
+  | 'riyadh'
   | 'baghdad'
-  | 'tripoli'
+  | 'benghazi'
+  | 'aden'
+  | 'bahrain'
+  | 'casablanca'
   | 'tunis'
   | 'algiers'
-  | 'rabat'
-  | 'casablanca'
-  | 'mecca'
   | 'alexandria'
   | 'aleppo'
   | 'aswan'
-  | 'medina'
-  | 'jeddah'
-  | 'riyadh'
+  | 'damascus'
+  | 'cairo'
   | 'khartoum'
   | 'amman'
   | 'luxor'
@@ -238,7 +234,21 @@ export type TurnEffect =
     }
   | { kind: 'pay'; from: number; to: number; amount: number; reason: 'rent' | 'luck-pay-each' }
   | { kind: 'collect'; to: number; froms: number[]; amount: number; reason: 'luck-collect-each' }
-  | { kind: 'card'; deck: CardDeck; cardId: CardId }
+  | {
+      kind: 'card'
+      deck: CardDeck
+      cardId: CardId
+      /**
+       * The drawer's balance immediately before the card's direct cash effect,
+       * the signed change, and the balance after — so the confirmation popup can
+       * show "You have {before} − {|delta|} → {after}". Optional (mirrors the
+       * `extraTurn?`/`doublesCount?` back-compat pattern: pre-popup fixtures omit
+       * them); live play always sets them, with `delta: 0` for non-money cards.
+       */
+      balanceBefore?: number
+      delta?: number
+      balanceAfter?: number
+    }
   | { kind: 'jail'; seat: number }
   /** A jailed seat left jail this turn (P2): how it happened decides the cost. */
   | { kind: 'jailRelease'; seat: number; via: 'fine' | 'card' | 'doubles' | 'forced' }

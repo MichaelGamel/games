@@ -67,7 +67,7 @@ export function BankGameScreen({ game, onNewGame, online }: BankGameScreenProps)
       )}
 
       <div className="grid flex-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="relative mx-auto w-full max-w-[min(92vw,560px)] lg:mx-0 lg:max-w-none lg:self-center">
+        <div className="relative mx-auto w-full max-w-[min(94vw,760px)] lg:mx-0 lg:max-w-none lg:self-center">
           <BankBoard
             players={game.players}
             ownership={game.ownership}
@@ -153,6 +153,10 @@ export function BankGameScreen({ game, onNewGame, online }: BankGameScreenProps)
             deck={game.cardReveal.deck}
             cardId={game.cardReveal.cardId}
             passReward={game.rules.passStartReward}
+            balanceBefore={game.cardReveal.balanceBefore}
+            delta={game.cardReveal.delta}
+            balanceAfter={game.cardReveal.balanceAfter}
+            onConfirm={game.acknowledgeCard}
           />
         )}
 

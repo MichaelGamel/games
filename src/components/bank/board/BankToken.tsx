@@ -13,7 +13,7 @@ interface BankTokenProps {
   isCurrent: boolean
   /** Stacking order so the active token rides on top. */
   z: number
-  /** Pawn diameter as a board percentage. */
+  /** Pawn diameter as a percentage of the board's width (height matches via aspect). */
   size: number
 }
 
@@ -36,7 +36,7 @@ export const BankToken = memo(function BankToken({
   return (
     <m.div
       className="absolute"
-      style={{ x: '-50%', y: '-50%', width: `${size}%`, height: `${size}%`, zIndex: z, pointerEvents: 'none' }}
+      style={{ x: '-50%', y: '-50%', width: `${size}%`, aspectRatio: '1 / 1', zIndex: z, pointerEvents: 'none' }}
       initial={false}
       animate={{ left: `${x}%`, top: `${y}%` }}
       transition={{ type: 'spring', stiffness: 700, damping: 30, mass: 0.7 }}
@@ -54,7 +54,7 @@ export const BankToken = memo(function BankToken({
           />
         )}
         <div
-          className="relative grid h-full w-full place-items-center rounded-full shadow-[0_3px_6px_rgba(0,0,0,0.45)] ring-2 ring-white/70"
+          className="relative grid h-full w-full place-items-center rounded-full shadow-[0_3px_6px_rgba(60,40,10,0.55)] ring-2 ring-white/80 outline outline-1 outline-amber-950/40"
           style={{ background: `radial-gradient(circle at 32% 28%, rgba(255,255,255,0.9), rgba(255,255,255,0) 44%), ${color}` }}
         >
           <span className="text-[1.3vmin] font-bold text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.6)] sm:text-[0.7rem]">

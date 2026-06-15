@@ -5,7 +5,7 @@
  * committed event flows through `COMMIT_TURN` and bumps `turnCount`, the online
  * sequence number, so equal `turnCount` ⇒ identical state across clients.
  */
-import { BOARD, DEFAULT_BANK_RULES, JAIL_MAX_TURNS } from './config'
+import { BOARD, DEFAULT_BANK_RULES, JAIL_MAX_TURNS, JAIL_TILE } from './config'
 import type {
   BankGameState,
   BankPhase,
@@ -176,7 +176,7 @@ function applyEffect(
       // A marker only — the card's concrete effects are their own entries.
       break
     case 'jail':
-      players[effect.seat].position = 30 // the Jail corner (السجن)
+      players[effect.seat].position = JAIL_TILE // the Jail corner (سجن الحظ)
       players[effect.seat].jailTurns = JAIL_MAX_TURNS // P2: that many escape attempts
       break
     case 'jailRelease':

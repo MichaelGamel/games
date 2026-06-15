@@ -10,7 +10,7 @@
  * mystery target. The reducer never draws, so a resolution replays the same way
  * everywhere.
  */
-import { BOARD, DECKS, DIE_FACES, MAX_CARD_CHAIN, MAX_LEVEL, PROPERTY_GROUPS } from './config'
+import { BOARD, DECKS, DIE_FACES, JAIL_TILE, MAX_CARD_CHAIN, MAX_LEVEL, PROPERTY_GROUPS } from './config'
 import { forwardSteps, landingTile, passesStart } from './board'
 import type {
   BankGameState,
@@ -198,7 +198,7 @@ export function resolveTurn(ctx: BankTurnContext): BankTurnResolution {
   function goToJail(): number {
     effects.push({ kind: 'jail', seat })
     wentToJail = true
-    return 30 // the Jail corner
+    return JAIL_TILE // the Jail corner (سجن الحظ)
   }
 
   /** Apply a drawn card's effect. Returns true to keep resolving the new tile. */
@@ -386,8 +386,24 @@ export function resolveTurn(ctx: BankTurnContext): BankTurnResolution {
         cardsUsed++
         const deck = tile.kind // 'luck' | 'court'
         const card = drawCard(deck, rng)
-        effects.push({ kind: 'card', deck, cardId: card.id })
+        // Capture the drawer's running balance around the card so the
+        // confirmation popup can show the calculation. The card marker is
+        // emitted first (keeping `[card, cash]` order), then back-filled once
+        // `applyCard` has run its direct debit/credit. `delta` is 0 for cards
+        // with no direct cash impact (plain move, go-to-jail, kept card).
+        const before = cash[seat]
+        const cardEffect: Extract<TurnEffect, { kind: 'card' }> = {
+          kind: 'card',
+          deck,
+          cardId: card.id,
+          balanceBefore: before,
+          delta: 0,
+          balanceAfter: before,
+        }
+        effects.push(cardEffect)
         resolving = applyCard(card)
+        cardEffect.delta = cash[seat] - before
+        cardEffect.balanceAfter = cash[seat]
         break
       }
       case 'luckyClub': {

@@ -8,6 +8,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { bankReducer, initialBankState, type PlayerSetup } from './bankReducer'
+import { BOARD_TILES } from './config'
 import { resolveBuyDecision, resolveDecline, resolveTurn, rollDice } from './rules'
 import { chooseBuyDecision, type BotLevel } from './bot'
 import type { BankGameState, BankRules } from './types'
@@ -30,7 +31,7 @@ const LEVELS: BotLevel[] = ['easy', 'medium', 'hard']
 function invariantError(state: BankGameState): string | null {
   for (const p of state.players) {
     if (p.cash < 0) return `seat ${p.id} cash negative (${p.cash})`
-    if (p.position < 0 || p.position >= 40) return `seat ${p.id} off board (${p.position})`
+    if (p.position < 0 || p.position >= BOARD_TILES) return `seat ${p.id} off board (${p.position})`
   }
   for (const entry of Object.values(state.ownership)) {
     if (!state.players[entry.owner]) return `ownership names a missing seat (${entry.owner})`

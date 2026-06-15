@@ -9,9 +9,13 @@
  */
 import type { BankRules, BankTile, BankTileNameKey, Card } from './types'
 
-/** The board is an 11×11 grid; its 4·11−4 = 40 perimeter cells are the tiles. */
-export const BANK_GRID = 11
-export const BOARD_TILES = 40
+/**
+ * The board is an 11-wide × 8-tall rectangle; its 2·11 + 2·8 − 4 = 34 perimeter
+ * cells are the tiles, matching the physical "بنك الحظ" board's landscape shape.
+ */
+export const BANK_COLS = 11
+export const BANK_ROWS = 8
+export const BOARD_TILES = 34
 export const DIE_FACES = 6
 
 /** Cash every player starts with. */
@@ -52,11 +56,13 @@ export const MAX_LEVEL = 4
 export const RENT_MULTIPLIERS: readonly number[] = [1, 5, 15, 40, 60]
 
 // ---------------------------------------------------------------------------
-// The board. Corners are fixed at 0/10/20/30 (Start / Jail / Free-Parking /
-// Go-To-Jail) — the classic Monopoly layout. 23 properties span 8 color groups
-// (seven of 3, one of 2), with 5 luck, 3 tax, and 5 reward tiles between them.
-// Egyptian names are placeholders, tuned in Phase 7. `board.test.ts` asserts
-// the invariants (counts, corner kinds, groups ≥ 2) so values can move freely.
+// The board, matching the physical "بنك الحظ" board (the user's photo). It is a
+// landscape 11×8 rectangle whose 34 perimeter cells are the tiles. Corners are
+// fixed at 0/7/17/24 (Start / Lucky Club / Fast Bus / Jail). 24 property tiles
+// (23 cities in color bands + البنزينة as the lone utility) sit between 6 card
+// cells (3 حظك Luck + 3 محاكمة Court) — there is no Income/Sales Tax. Prices and
+// names are the real board's; rent ≈ price/10. `board.test.ts` asserts the
+// invariants (counts, corner kinds, color groups ≥ 2) so values can move freely.
 // ---------------------------------------------------------------------------
 
 const property = (
@@ -78,59 +84,57 @@ const property = (
 }
 
 /**
- * The board, matching the physical "بنك الحظ" board (best-effort transcription
- * of the user's photo — correct names/prices/colors here). Start (البداية) is
- * bottom-left (index 0); play runs clockwise. Corners: 0 Start, 10 Go-To-Jail
- * (اذهب إلى السجن), 20 Free Parking (استراحة), 30 Jail (السجن). Two card kinds —
- * `luck` (حظك) and `court` (محاكمة) — draw from their own decks. Money is in
- * Egyptian pounds. Eight color groups (`A`–`G` cities + `U` utilities), each ≥ 2.
+ * The 34-tile board. Start (البداية) is bottom-left (index 0); play runs
+ * clockwise: up the left edge, across the top, down the right edge, then back
+ * along the bottom. Corners: 0 Start, 7 Lucky Club (نادي الحظ), 17 Fast Bus
+ * (الأتوبيس السريع), 24 Jail (سجن الحظ). Two card kinds — `luck` (حظك) and
+ * `court` (محاكمة) — draw from their own decks. Money is in Egyptian pounds.
+ * Color groups `A`–`J` (cities) + `U` (the single petrol utility); each color
+ * group has ≥ 2 tiles, adjacent cities sharing a band as on the photo.
  */
 export const BOARD: readonly BankTile[] = [
   { id: 0, kind: 'start', nameKey: 'start' },
-  // left edge (bottom → top)
-  property(1, 'suezCanal', 'U', 200, 20),
-  { id: 2, kind: 'court', nameKey: 'court' },
-  property(3, 'damascus', 'A', 100, 10),
-  { id: 4, kind: 'tax', nameKey: 'incomeTax', amount: 100 },
-  property(5, 'beirut', 'A', 100, 10),
-  { id: 6, kind: 'luck', nameKey: 'luck' },
-  property(7, 'baghdad', 'A', 120, 12),
-  property(8, 'banqueMisr', 'U', 200, 20),
-  property(9, 'tripoli', 'B', 120, 12),
-  { id: 10, kind: 'luckyClub', nameKey: 'luckyClub', amount: 30 },
-  // top edge (left → right)
-  property(11, 'tunis', 'B', 140, 14),
-  { id: 12, kind: 'court', nameKey: 'court' },
-  property(13, 'algiers', 'B', 140, 14),
-  property(14, 'petrolStation', 'U', 150, 15),
-  property(15, 'rabat', 'C', 160, 16),
-  { id: 16, kind: 'luck', nameKey: 'luck' },
-  property(17, 'casablanca', 'C', 160, 16),
-  { id: 18, kind: 'tax', nameKey: 'salesTax', amount: 75 },
-  property(19, 'mecca', 'C', 180, 18),
-  { id: 20, kind: 'fastbus', nameKey: 'fastBus' },
-  // right edge (top → bottom)
-  property(21, 'alexandria', 'D', 250, 25),
-  { id: 22, kind: 'court', nameKey: 'court' },
-  property(23, 'aleppo', 'D', 200, 20),
-  property(24, 'aswan', 'E', 250, 25),
-  property(25, 'cairoHospital', 'U', 50, 5),
-  { id: 26, kind: 'luck', nameKey: 'luck' },
-  property(27, 'medina', 'E', 220, 22),
-  property(28, 'jeddah', 'E', 240, 24),
-  property(29, 'riyadh', 'E', 260, 26),
-  { id: 30, kind: 'jail', nameKey: 'jail' },
-  // bottom edge (right → left, approaching Start)
-  property(31, 'khartoum', 'F', 200, 20),
-  property(32, 'amman', 'F', 250, 25),
-  property(33, 'luxor', 'F', 200, 20),
-  property(34, 'portSaid', 'F', 250, 25),
-  { id: 35, kind: 'luck', nameKey: 'luck' },
-  property(36, 'sanaa', 'G', 250, 25),
-  { id: 37, kind: 'court', nameKey: 'court' },
-  property(38, 'kuwait', 'G', 250, 25),
-  property(39, 'qatar', 'G', 150, 15),
+  // left edge (bottom → top): 0 Start … 7 Lucky Club
+  property(1, 'alquds', 'B', 90, 9),
+  property(2, 'gaza', 'B', 250, 25),
+  { id: 3, kind: 'luck', nameKey: 'luck' },
+  property(4, 'beirut', 'A', 300, 30),
+  property(5, 'riyadh', 'A', 250, 25),
+  property(6, 'baghdad', 'A', 250, 25),
+  { id: 7, kind: 'luckyClub', nameKey: 'luckyClub', amount: 30 },
+  // top edge (left → right): 7 Lucky Club … 17 Fast Bus
+  property(8, 'benghazi', 'C', 150, 15),
+  property(9, 'aden', 'C', 100, 10),
+  { id: 10, kind: 'court', nameKey: 'court' },
+  property(11, 'bahrain', 'D', 300, 30),
+  { id: 12, kind: 'luck', nameKey: 'luck' },
+  property(13, 'casablanca', 'D', 250, 25),
+  property(14, 'tunis', 'E', 200, 20),
+  property(15, 'gasStation', 'U', 300, 30),
+  property(16, 'algiers', 'E', 300, 30),
+  { id: 17, kind: 'fastbus', nameKey: 'fastBus' },
+  // right edge (top → bottom): 17 Fast Bus … 24 Jail
+  property(18, 'alexandria', 'F', 325, 33),
+  property(19, 'aleppo', 'F', 300, 30),
+  { id: 20, kind: 'court', nameKey: 'court' },
+  property(21, 'aswan', 'G', 200, 20),
+  property(22, 'damascus', 'G', 350, 35),
+  property(23, 'cairo', 'G', 450, 45),
+  { id: 24, kind: 'jail', nameKey: 'jail' },
+  // bottom edge (right → left, approaching Start): 24 Jail … 0 Start
+  property(25, 'khartoum', 'H', 200, 20),
+  property(26, 'amman', 'H', 250, 25),
+  property(27, 'luxor', 'I', 200, 20),
+  property(28, 'portSaid', 'I', 200, 20),
+  { id: 29, kind: 'luck', nameKey: 'luck' },
+  property(30, 'sanaa', 'J', 250, 25),
+  { id: 31, kind: 'court', nameKey: 'court' },
+  property(32, 'kuwait', 'J', 250, 25),
+  property(33, 'qatar', 'J', 150, 15),
 ]
+
+/** Index of the Jail corner (سجن الحظ), derived so callers never hard-code it. */
+export const JAIL_TILE = BOARD.findIndex((t) => t.kind === 'jail')
 
 /**
  * Property groups (color set → tile ids), derived from {@link BOARD} so the two
@@ -184,19 +188,22 @@ export const COURT_DECK: readonly Card[] = [
 export const DECKS = { luck: LUCK_DECK, court: COURT_DECK } as const
 
 /**
- * Display color for each property group's stripe on the board (board art, not
- * game logic), matched to the physical board's palette. `U` is the utilities
- * group (Suez Canal, Banque Misr, petrol station, hospital).
+ * Display color for each property group's band on the board (board art, not game
+ * logic), matched to the physical board's color bands. `U` is the lone petrol
+ * utility (البنزينة), painted slate so it reads apart from the city bands.
  */
 export const GROUP_COLORS: Readonly<Record<string, string>> = {
-  A: '#db2777', // pink (Damascus/Beirut/Baghdad)
-  B: '#ea580c', // orange (Tripoli/Tunis/Algiers)
-  C: '#ca8a04', // gold (Rabat/Casablanca/Mecca)
-  D: '#7f1d1d', // maroon (Alexandria/Aleppo)
-  E: '#15803d', // green (Aswan/Medina/Jeddah/Riyadh)
-  F: '#0891b2', // cyan (Khartoum/Amman/Luxor/Port Said)
-  G: '#dc2626', // red (Sanaa/Kuwait/Qatar)
-  U: '#64748b', // slate (utilities)
+  A: '#b91c1c', // red    (Beirut / Riyadh / Baghdad)
+  B: '#0f766e', // teal   (Jerusalem / Gaza)
+  C: '#c2410c', // orange (Benghazi / Aden)
+  D: '#6d28d9', // violet (Bahrain / Casablanca)
+  E: '#15803d', // green  (Tunis / Algiers)
+  F: '#1d4ed8', // blue   (Alexandria / Aleppo)
+  G: '#b45309', // amber  (Aswan / Damascus / Cairo)
+  H: '#be185d', // magenta(Khartoum / Amman)
+  I: '#0891b2', // cyan   (Luxor / Port Said)
+  J: '#7e22ce', // purple (Sanaa / Kuwait / Qatar)
+  U: '#475569', // slate  (petrol utility)
 }
 
 export interface ColorOption {

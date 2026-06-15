@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { BANK_GRID, BOARD, GROUP_COLORS } from '../../../bank/config'
+import { BANK_COLS, BANK_ROWS, BOARD, GROUP_COLORS } from '../../../bank/config'
 import { cellsInRenderOrder, tilePercent } from '../../../bank/board'
 import type { BankActiveMove } from '../../../hooks/useBankElHazz'
 import type { BankGameState, BankPhase, BankPlayer, Ownership } from '../../../bank/types'
@@ -20,33 +20,41 @@ interface BankBoardProps {
   onSelectTile?: (tileId: number) => void
 }
 
-/** Pawn diameter as a board percentage (a bit under one 1/11 cell). */
-const TOKEN_SIZE = 6
+/** Pawn diameter as a percentage of the board's width (kept circular via aspect). */
+const TOKEN_SIZE = 6.4
 
 const RENDER_CELLS = cellsInRenderOrder()
 
 /**
- * The static board surface: the 11×11 CSS grid of perimeter tiles around the
- * empty interior. Depends only on the seat colors and the ownership map, so it
- * is memoized on them and never re-renders while tokens animate across it.
+ * The static board surface: the 11×8 CSS grid of perimeter tiles around the
+ * empty interior, on the vintage parchment field. Depends only on the seat
+ * colors/names and the ownership map, so it is memoized on them and never
+ * re-renders while tokens animate across it.
  */
 const BankBoardSurface = memo(
   function BankBoardSurface({
     ownership,
     colors,
+    names,
     onSelectTile,
   }: {
     ownership: Record<number, Ownership>
     colors: readonly string[]
+    names: readonly string[]
     onSelectTile?: (tileId: number) => void
   }) {
     return (
       <div
-        className="absolute inset-0 grid overflow-hidden rounded-2xl border-4 border-board-line/70 shadow-2xl ring-1 ring-black/20"
+        className="absolute inset-0 grid overflow-hidden rounded-[1.25rem] p-[1.5%] shadow-2xl ring-1 ring-amber-950/40"
         style={{
-          gridTemplateColumns: `repeat(${BANK_GRID}, 1fr)`,
-          gridTemplateRows: `repeat(${BANK_GRID}, 1fr)`,
-          background: '#0f1424',
+          gridTemplateColumns: `repeat(${BANK_COLS}, 1fr)`,
+          gridTemplateRows: `repeat(${BANK_ROWS}, 1fr)`,
+          // Warm parchment field inside a thick, slightly aged yellow frame.
+          background:
+            'radial-gradient(120% 120% at 50% 0%, #fdf3d8 0%, #f5e6c0 55%, #ecd7a6 100%)',
+          border: '0.9rem solid #e6b94e',
+          boxShadow:
+            'inset 0 0 0 0.18rem #b9892f, inset 0 0 60px rgba(120,80,20,0.18), 0 18px 40px rgba(0,0,0,0.45)',
         }}
       >
         {RENDER_CELLS.map((cell) =>
@@ -60,6 +68,9 @@ const BankBoardSurface = memo(
               ownerColor={
                 ownership[cell.tileId] ? (colors[ownership[cell.tileId].owner] ?? null) : null
               }
+              ownerName={
+                ownership[cell.tileId] ? (names[ownership[cell.tileId].owner] ?? null) : null
+              }
               level={ownership[cell.tileId]?.level ?? 0}
               mortgaged={ownership[cell.tileId]?.mortgaged ?? false}
               onSelect={onSelectTile}
@@ -72,7 +83,9 @@ const BankBoardSurface = memo(
   (prev, next) =>
     prev.ownership === next.ownership &&
     prev.colors.length === next.colors.length &&
-    prev.colors.every((c, i) => c === next.colors[i]),
+    prev.colors.every((c, i) => c === next.colors[i]) &&
+    prev.names.length === next.names.length &&
+    prev.names.every((n, i) => n === next.names[i]),
 )
 
 /**
@@ -115,9 +128,15 @@ export const BankBoard = memo(function BankBoard({
     // The board lives in a fixed left-to-right coordinate space: tile cells flow
     // through a CSS grid while tokens are positioned with physical `left`/`top`
     // percentages, so the geometry must not mirror under an RTL page (Arabic).
-    // Centered hub text still reads correctly either way.
-    <div className="relative aspect-square w-full" dir="ltr">
-      <BankBoardSurface ownership={ownership} colors={players.map((p) => p.color)} onSelectTile={onSelectTile} />
+    // Centered hub text still reads correctly either way. The 11×8 aspect keeps
+    // every cell square (W/11 === H/8).
+    <div className="relative aspect-[11/8] w-full" dir="ltr">
+      <BankBoardSurface
+        ownership={ownership}
+        colors={players.map((p) => p.color)}
+        names={players.map((p) => p.name)}
+        onSelectTile={onSelectTile}
+      />
 
       <BankCenter
         lastDice={lastDice}
