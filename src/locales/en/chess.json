@@ -9,6 +9,8 @@
     "soloSubtitle": "Take on the bot — three levels of cunning.",
     "pass": "Two Players",
     "passSubtitle": "Share one screen and trade blows in 3D.",
+    "online": "Play Online",
+    "onlineSubtitle": "Create or join a room and play a friend on another computer.",
     "difficulty": "Difficulty",
     "start": "Enter the Board ▶"
   },
@@ -21,13 +23,17 @@
     "white": "White",
     "black": "Black",
     "computer": "Computer",
-    "you": "You"
+    "you": "You",
+    "youAreWhite": "You play White",
+    "youAreBlack": "You play Black"
   },
   "turn": {
     "your": "Your move",
     "white": "White to move",
     "black": "Black to move",
-    "thinking": "Computer is thinking…"
+    "thinking": "Computer is thinking…",
+    "opponent": "{{name}}'s move",
+    "waiting": "Waiting for {{name}}…"
   },
   "hud": {
     "check": "Check!",
@@ -60,6 +66,10 @@
     "drawInsufficient": "Not enough material left to checkmate.",
     "drawThreefold": "Draw by threefold repetition.",
     "drawFifty": "Draw by the fifty-move rule.",
+    "youLost": "You've been checkmated.",
+    "playerWins": "{{name}} wins!",
+    "matchOver": "Match over",
+    "forfeitWin": "Your opponent left — you win! 🎉",
     "again": "Play Again",
     "menu": "Back to Menu"
   },

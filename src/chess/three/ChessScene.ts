@@ -328,13 +328,14 @@ export class ChessScene {
     this.markersGroup.add(ring)
   }
 
-  /** Animate a fully-resolved move; `onDone` fires when the mover lands. */
-  playMove(anim: MoveAnimation, onDone: () => void) {
+  /** Animate a fully-resolved move; optional `onDone` fires when the mover lands.
+   *  (The controller commits on its own timer, so `onDone` is usually omitted.) */
+  playMove(anim: MoveAnimation, onDone?: () => void) {
     this.lastInteract = this.time
     this.setSelection(null)
     const mover = this.pieces.get(anim.from)
     if (!mover) {
-      onDone()
+      onDone?.()
       return
     }
     this.pieces.delete(anim.from)
@@ -361,7 +362,7 @@ export class ChessScene {
         this.pieces.set(anim.to, mover)
         mover.square = anim.to
         if (anim.promotion) this.promote(mover, anim.promotion, toV)
-        onDone()
+        onDone?.()
       }),
     )
   }

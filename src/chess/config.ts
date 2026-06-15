@@ -70,6 +70,24 @@ export const AI_DEPTH: Record<'easy' | 'medium' | 'hard', number> = {
   hard: 3,
 }
 
+/** Chess is strictly head-to-head: White (seat 0) vs Black (seat 1). */
+export const CHESS_MAX_PLAYERS = 2
+export const CHESS_MIN_PLAYERS = 2
+
+export interface ColorOption {
+  name: string
+  value: string
+}
+
+/** Token colours offered in the online lobby (cosmetic — the chess side a
+ *  player gets is decided by seat, not by this colour). */
+export const CHESS_COLORS: readonly ColorOption[] = [
+  { name: 'Amethyst', value: '#a855f7' },
+  { name: 'Cyan', value: '#38d6ff' },
+  { name: 'Amber', value: '#f59e0b' },
+  { name: 'Rose', value: '#f43f5e' },
+]
+
 /** Centipawn material values, also used for the captured-tray advantage count. */
 export const PIECE_VALUE: Record<string, number> = {
   p: 100,

@@ -144,6 +144,9 @@ export interface UseOnlineMatchArgs<R, S> {
   matchRules?: () => unknown
   /** Seats this game supports (default 4; Connect Four passes 2). */
   maxPlayers?: number
+  /** Auto-skip a present-but-idle player after ~30s (default true). Chess turns
+   *  take real thought, so it passes false to keep the per-move clock off. */
+  idleTurnTimer?: boolean
 }
 
 export interface OnlineMatch<R> {
@@ -199,6 +202,7 @@ export function useOnlineMatch<R, S>({
   onSeat,
   matchRules,
   maxPlayers = MAX_PLAYERS,
+  idleTurnTimer = true,
 }: UseOnlineMatchArgs<R, S>): OnlineMatch<R> {
   const [startedPlayers, setStartedPlayers] = useState<StartPlayer[] | null>(null)
   const startedRef = useRef<StartPlayer[] | null>(null)
@@ -773,7 +777,11 @@ export function useOnlineMatch<R, S>({
   const turnDeadlineRef = useRef<number | null>(null)
   const [turnSecondsLeft, setTurnSecondsLeft] = useState<number | null>(null)
   const timedTurnActive =
-    startedPlayers != null && game.phase === 'idle' && canPlay && room.status === 'connected'
+    idleTurnTimer &&
+    startedPlayers != null &&
+    game.phase === 'idle' &&
+    canPlay &&
+    room.status === 'connected'
 
   useEffect(() => {
     if (!timedTurnActive) {

@@ -1,12 +1,17 @@
 /**
- * The orchestration facade for 3D chess — the only place that mixes the rules
- * engine, the AI, the Three.js scene, and sound. Components depend on the
- * `ChessController` it returns, never on those pieces directly.
+ * The orchestration facade for chess — the only place that mixes the rules
+ * engine, the AI, the Three.js scene, sound, and (for online play) the shared
+ * turn-sequencing core. Components depend on the `ChessController` it returns.
  *
- * Authoritative game state lives in the {@link ChessEngine}; the scene is a pure
- * visual replay driven by {@link MoveAnimation}s. Synchronous interaction flags
- * (busy / selected / pending promotion) live in refs so a rapid tap can never
- * race a React render; everything else is mirrored into state for the HUD.
+ * Like every other game's controller, it is built on {@link createTurnSequencer}
+ * and exposes the structural shape `useOnlineMatch` needs (a phase machine with
+ * `players` / `currentPlayerIndex` / `turnCount` / `winnerId` / `finishedOrder`),
+ * so the same self-healing online machinery drives chess, Snakes, Ludo, etc.
+ *
+ * Authoritative state lives in the {@link ChessEngine}; the scene is a pure
+ * visual replay. One move is one sequenced `turn`: every client applies the same
+ * `{from,to,promotion}` to its in-sync engine and animates the result. White is
+ * seat 0 (moves first), Black is seat 1.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ChessEngine } from '../chess/engine'
@@ -14,8 +19,15 @@ import { chooseMove } from '../chess/ai'
 import { chessAudio } from '../chess/audio'
 import { ChessScene } from '../chess/three/ChessScene'
 import { PIECE_VALUE, TIMING } from '../chess/config'
+import { createTurnSequencer } from '../lib/turnSequencer'
+import type { MatchDecision } from '../game/types'
 import type {
   ChessMode,
+  ChessPhase,
+  ChessPlayer,
+  ChessResolution,
+  ChessShared,
+  ChessWinReason,
   Difficulty,
   GameOutcome,
   PieceColor,
@@ -23,8 +35,7 @@ import type {
   Square,
 } from '../chess/types'
 
-/** The human always plays White (and is at the bottom of the board). */
-const HUMAN: PieceColor = 'w'
+const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
 export interface CapturedPieces {
   /** Pieces White has captured (Black men), and vice-versa. */
@@ -32,86 +43,151 @@ export interface CapturedPieces {
   b: PieceType[]
 }
 
+/** A player to seat — names/colours supplied by the caller (local) or lineup. */
+export interface ChessPlayerSetup {
+  name: string
+  color: string
+  isBot?: boolean
+}
+
+export interface ChessNetHooks {
+  onLocalTurn?: (resolution: ChessResolution, seq: number) => void
+  onOutOfSync?: () => void
+}
+
+export interface UseChessGameOptions {
+  mode: ChessMode
+  difficulty?: Difficulty
+  /** Online: this client's seat (0 = White, 1 = Black, -1/undefined = spectator). */
+  controlsPlayer?: number | 'all'
+  /** Local: players to auto-seat on mount. Online seats come from the lineup. */
+  localPlayers?: ChessPlayerSetup[]
+  hooks?: ChessNetHooks
+}
+
 export interface ChessController {
-  /** Attach/detach the 3D scene to a DOM node (wrap in a local callback ref). */
   attachScene: (node: HTMLDivElement | null) => void
   mode: ChessMode
   difficulty: Difficulty
+  // ---- HUD-facing view ----
+  phase: ChessPhase
   turn: PieceColor
   inCheck: boolean
   outcome: GameOutcome | null
   history: string[]
   captured: CapturedPieces
-  /** Net material in centipawns from White's perspective (for the advantage badge). */
   advantage: number
   busy: boolean
   thinking: boolean
-  /** A pending human promotion choice, if the picker is open. */
   promotion: { from: Square; to: Square } | null
   flipped: boolean
   muted: boolean
-  /** Idle camera auto-orbit — off by default. */
   autoRotate: boolean
   canUndo: boolean
+  isMyTurn: boolean
+  controlsPlayer: number | 'all'
+  // ---- HUD actions ----
   newGame: () => void
   undo: () => void
   flip: () => void
   toggleAutoRotate: () => void
   toggleMute: () => void
-  setDifficulty: (d: Difficulty) => void
   choosePromotion: (type: PieceType) => void
   cancelPromotion: () => void
+  // ---- OnlineMatchGame<ChessResolution> contract ----
+  players: ChessPlayer[]
+  currentPlayerIndex: number
+  turnCount: number
+  winnerId: number | null
+  finishedOrder: number[]
+  draw: boolean
+  winReason: ChessWinReason
+  standings: ChessPlayer[]
+  lastRoll: number | null
+  skipFlash: { playerId: number; nonce: number } | null
+  applyRemoteTurn: (resolution: ChessResolution, seq: number) => void
+  applySkip: (seq: number) => void
+  applyRemoteDecision: (decision: MatchDecision, seq: number) => void
+  applyRemoteStart: (players: { name: string; color: string }[], rules?: unknown) => void
+  applyRemoteReset: () => void
+  addPlayer: (player: { name: string; color: string }) => void
+  forfeitWin: (winnerId: number) => void
+  syncStatus: () => { seq: number; busy: boolean }
+  buildShared: () => ChessShared
+  // ---- room helpers ----
+  startGame: (players: ChessPlayerSetup[]) => void
+  loadSnapshot: (snap: {
+    players: { name: string; color: string }[]
+    shared: ChessShared
+    currentPlayerIndex: number
+    finishedOrder: number[]
+    ended: boolean
+    turnCount: number
+  }) => void
+  /** Current FEN — the per-seat snapshot/heartbeat payload. */
+  fen: string
 }
 
-interface Options {
-  mode: ChessMode
-  difficulty: Difficulty
-}
-
-export function useChessGame({ mode, difficulty: initialDifficulty }: Options): ChessController {
-  // A single stable engine instance for the life of the hook.
+export function useChessGame(opts: UseChessGameOptions): ChessController {
+  const { mode } = opts
   const [engine] = useState(() => new ChessEngine())
+  const [sequencer] = useState(() => createTurnSequencer<ChessResolution>())
 
   const sceneRef = useRef<ChessScene | null>(null)
   const tapRef = useRef<(square: Square) => void>(() => {})
 
-  // Synchronous interaction state (read inside event/async callbacks).
+  // Sync-critical refs (read inside event/async callbacks, no render lag).
+  const phaseRef = useRef<ChessPhase>('setup')
+  const currentSeatRef = useRef(0)
+  const turnCountRef = useRef(0)
   const selectedRef = useRef<Square | null>(null)
-  const busyRef = useRef(false)
   const promotionRef = useRef<{ from: Square; to: Square } | null>(null)
-  const tokenRef = useRef(0)
-  const aiTimerRef = useRef<number | null>(null)
-  /** One entry per half-move played: the piece captured, or null. Undo-aware. */
   const capturesRef = useRef<Array<{ color: PieceColor; type: PieceType } | null>>([])
+  // SAN move list, kept in a ref so it survives a FEN-based snapshot load (which
+  // resets chess.js's own history).
+  const historyRef = useRef<string[]>([])
+  const winnerIdRef = useRef<number | null>(null)
+  const autoRotateRef = useRef(false)
   const flippedRef = useRef(false)
+  const botTokenRef = useRef(0)
+  const difficultyRef = useRef<Difficulty>(opts.difficulty ?? 'medium')
+  const hooksRef = useRef(opts.hooks)
+  const controlsRef = useRef<number | 'all'>(opts.controlsPlayer ?? (mode === 'pass' ? 'all' : 0))
 
   // HUD mirrors.
-  const [difficulty, setDifficultyState] = useState<Difficulty>(initialDifficulty)
-  const [turn, setTurn] = useState<PieceColor>('w')
+  const [phase, setPhase] = useState<ChessPhase>('setup')
+  const [players, setPlayers] = useState<ChessPlayer[]>([])
+  const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0)
+  const [turnCount, setTurnCount] = useState(0)
   const [inCheck, setInCheck] = useState(false)
   const [outcome, setOutcome] = useState<GameOutcome | null>(null)
+  const [winnerId, setWinnerId] = useState<number | null>(null)
+  const [finishedOrder, setFinishedOrder] = useState<number[]>([])
+  const [draw, setDraw] = useState(false)
+  const [winReason, setWinReason] = useState<ChessWinReason>(null)
   const [history, setHistory] = useState<string[]>([])
   const [captured, setCaptured] = useState<CapturedPieces>({ w: [], b: [] })
-  const [busy, setBusyState] = useState(false)
-  const [thinking, setThinking] = useState(false)
   const [promotion, setPromotionState] = useState<{ from: Square; to: Square } | null>(null)
   const [flipped, setFlippedState] = useState(false)
   const [muted, setMuted] = useState(false)
   const [autoRotate, setAutoRotateState] = useState(false)
-  const autoRotateRef = useRef(false)
+  const [fen, setFen] = useState(() => engine.fen())
 
-  const difficultyRef = useRef(initialDifficulty)
+  const controlsPlayer = opts.controlsPlayer ?? (mode === 'pass' ? 'all' : 0)
+
   useEffect(() => {
-    difficultyRef.current = difficulty
-  }, [difficulty])
+    difficultyRef.current = opts.difficulty ?? 'medium'
+    hooksRef.current = opts.hooks
+    controlsRef.current = controlsPlayer
+  })
 
-  const setBusy = useCallback((v: boolean) => {
-    busyRef.current = v
-    setBusyState(v)
-  }, [])
   const setPromo = useCallback((v: { from: Square; to: Square } | null) => {
     promotionRef.current = v
     setPromotionState(v)
+  }, [])
+
+  const play = useCallback((sound: Parameters<typeof chessAudio.play>[0]) => {
+    chessAudio.play(sound)
   }, [])
 
   const deriveCaptured = useCallback((): CapturedPieces => {
@@ -123,21 +199,6 @@ export function useChessGame({ mode, difficulty: initialDifficulty }: Options): 
     }
     const byValue = (a: PieceType, z: PieceType) => PIECE_VALUE[z] - PIECE_VALUE[a]
     return { w: w.sort(byValue), b: b.sort(byValue) }
-  }, [])
-
-  const refreshHud = useCallback(() => {
-    const status = engine.status()
-    setTurn(status.turn)
-    setInCheck(status.inCheck)
-    setOutcome(status.outcome ?? null)
-    setHistory(engine.history())
-    setCaptured(deriveCaptured())
-    sceneRef.current?.setCheck(status.checkSquare ?? null)
-    return status
-  }, [deriveCaptured, engine])
-
-  const play = useCallback((sound: Parameters<typeof chessAudio.play>[0]) => {
-    chessAudio.play(sound)
   }, [])
 
   const clearSelection = useCallback(() => {
@@ -154,69 +215,105 @@ export function useChessGame({ mode, difficulty: initialDifficulty }: Options): 
     )
   }, [engine])
 
-  // Forward declarations resolved via a ref so the move → AI → move cycle can
-  // call back into itself without stale closures.
-  const executeRef = useRef<(from: Square, to: Square, promotion?: PieceType) => void>(() => {})
+  // ---- the heart: animate + commit one move (local and remote share this) ---
 
-  const triggerAI = useCallback(() => {
-    setThinking(true)
-    const token = tokenRef.current
-    aiTimerRef.current = window.setTimeout(() => {
-      if (token !== tokenRef.current) return
-      const intent = chooseMove(engine.fen(), difficultyRef.current)
-      setThinking(false)
-      if (!intent) {
-        setBusy(false)
-        return
+  const applyEnd = useCallback(
+    (result: GameOutcome) => {
+      let wId: number | null = null
+      let fin: number[]
+      let dr = false
+      let reason: ChessWinReason = null
+      if (result.kind === 'checkmate') {
+        wId = result.winner === 'w' ? 0 : 1
+        fin = [wId, wId === 0 ? 1 : 0]
+        reason = 'mate'
+      } else {
+        dr = true
+        fin = [0, 1]
       }
-      executeRef.current(intent.from, intent.to, intent.promotion)
-    }, Math.max(TIMING.aiThink * 1000, 250))
-  }, [engine, setBusy])
-
-  const afterMove = useCallback(
-    (capturedType: PieceType | undefined, color: PieceColor, check: boolean) => {
-      capturesRef.current.push(capturedType ? { color, type: capturedType } : null)
-      const status = refreshHud()
-      if (status.outcome) {
-        setBusy(false)
-        const winner = status.outcome.kind === 'checkmate' ? status.outcome.winner : null
-        sceneRef.current?.celebrateWin(winner)
-        play(status.outcome.kind === 'checkmate' ? 'win' : 'draw')
-        return
-      }
-      if (check) play('check')
-      const next = engine.turn()
-      if (mode === 'solo' && next !== HUMAN) triggerAI()
-      else setBusy(false)
+      winnerIdRef.current = wId
+      setWinnerId(wId)
+      setFinishedOrder(fin)
+      setDraw(dr)
+      setWinReason(reason)
+      setOutcome(result)
+      phaseRef.current = 'won'
+      setPhase('won')
+      sceneRef.current?.celebrateWin(wId != null ? (wId === 0 ? 'w' : 'b') : null)
+      play(result.kind === 'checkmate' ? 'win' : 'draw')
     },
-    [engine, mode, play, refreshHud, setBusy, triggerAI],
+    [play],
   )
 
-  const executeMove = useCallback(
-    (from: Square, to: Square, promotionPiece?: PieceType) => {
-      const anim = engine.move(from, to, promotionPiece)
-      if (!anim) return
+  const executeTurn = useCallback(
+    async (resolution: ChessResolution, alive: () => boolean) => {
+      const anim = engine.move(resolution.from, resolution.to, resolution.promotion)
+      if (!anim) return // illegal ⇒ out of sync; committedCount stalls ⇒ onOutOfSync
+      phaseRef.current = 'moving'
+      setPhase('moving')
       selectedRef.current = null
-      setBusy(true)
+      sceneRef.current?.setSelection(null)
+      sceneRef.current?.playMove(anim)
       play(anim.captureSquare ? 'capture' : anim.rook ? 'castle' : anim.promotion ? 'promote' : 'move')
-      const token = tokenRef.current
-      sceneRef.current?.playMove(anim, () => {
-        if (token !== tokenRef.current) return
-        afterMove(anim.capturedType, anim.color, anim.check)
-      })
+
+      const dur = anim.type === 'n' ? TIMING.knightHop : TIMING.move
+      await delay(dur * 1000)
+      if (!alive()) return
+
+      // Commit: advance the sequence and refresh every view from the engine.
+      capturesRef.current.push(
+        anim.capturedType ? { color: anim.color, type: anim.capturedType } : null,
+      )
+      turnCountRef.current += 1
+      const status = engine.status()
+      const seat = status.turn === 'w' ? 0 : 1
+      currentSeatRef.current = seat
+      setCurrentPlayerIndex(seat)
+      setTurnCount(turnCountRef.current)
+      setInCheck(status.inCheck)
+      historyRef.current = [...historyRef.current, anim.san]
+      setHistory(historyRef.current)
+      setCaptured(deriveCaptured())
+      setFen(engine.fen())
+      sceneRef.current?.setCheck(status.checkSquare ?? null)
+
+      if (status.outcome) {
+        applyEnd(status.outcome)
+      } else {
+        setOutcome(null)
+        phaseRef.current = 'idle'
+        setPhase('idle')
+        if (status.inCheck) play('check')
+      }
     },
-    [engine, afterMove, play, setBusy],
+    [engine, play, deriveCaptured, applyEnd],
   )
-  useEffect(() => {
-    executeRef.current = executeMove
-  }, [executeMove])
+
+  // Run a locally-initiated move through the sequencer (broadcast + animate).
+  const runLocalTurn = useCallback(
+    (resolution: ChessResolution) => {
+      if (!sequencer.acquireTurnLock()) return
+      void (async () => {
+        try {
+          hooksRef.current?.onLocalTurn?.(resolution, sequencer.claimSeq())
+          await executeTurn(resolution, sequencer.beginRun())
+        } finally {
+          sequencer.releaseTurnLock()
+        }
+      })()
+    },
+    [sequencer, executeTurn],
+  )
+
+  const isControllable = (seat: number) =>
+    controlsRef.current === 'all' || controlsRef.current === seat
 
   const handleSquareTap = useCallback(
     (square: Square) => {
-      if (busyRef.current || promotionRef.current) return
-      const side = engine.turn()
-      const isHumanTurn = mode === 'pass' || side === HUMAN
-      if (!isHumanTurn) return
+      if (phaseRef.current !== 'idle' || promotionRef.current) return
+      const seat = currentSeatRef.current
+      if (!isControllable(seat)) return
+      const side: PieceColor = seat === 0 ? 'w' : 'b'
 
       const sel = selectedRef.current
       if (!sel) {
@@ -234,7 +331,7 @@ export function useChessGame({ mode, difficulty: initialDifficulty }: Options): 
           setPromo({ from: sel, to: square })
           clearSelection()
         } else {
-          executeMove(sel, square)
+          runLocalTurn({ from: sel, to: square })
         }
         return
       }
@@ -242,15 +339,213 @@ export function useChessGame({ mode, difficulty: initialDifficulty }: Options): 
       if (piece && piece.color === side) selectSquare(square)
       else clearSelection()
     },
-    [engine, mode, clearSelection, executeMove, selectSquare, setPromo],
+    [engine, clearSelection, selectSquare, setPromo, runLocalTurn],
   )
 
-  // Keep the scene's stable tap callback pointed at the latest handler.
   useEffect(() => {
     tapRef.current = handleSquareTap
   }, [handleSquareTap])
 
-  // Build the scene when the board div mounts; tear it down when it unmounts.
+  // ---- match lifecycle ------------------------------------------------------
+
+  const startGame = useCallback(
+    (setup: ChessPlayerSetup[]) => {
+      botTokenRef.current += 1
+      engine.reset()
+      sequencer.rebase(0)
+      turnCountRef.current = 0
+      capturesRef.current = []
+      selectedRef.current = null
+      winnerIdRef.current = null
+      setPromo(null)
+      setPlayers(
+        setup.slice(0, 2).map((p, i) => ({ id: i, name: p.name, color: p.color, isBot: p.isBot ?? false })),
+      )
+      currentSeatRef.current = 0
+      setCurrentPlayerIndex(0)
+      setTurnCount(0)
+      setWinnerId(null)
+      setFinishedOrder([])
+      setDraw(false)
+      setWinReason(null)
+      setOutcome(null)
+      setInCheck(false)
+      historyRef.current = []
+      setHistory([])
+      setCaptured({ w: [], b: [] })
+      setFen(engine.fen())
+      phaseRef.current = 'idle'
+      setPhase('idle')
+      sceneRef.current?.setPlacements(engine.placements())
+      sceneRef.current?.setCheck(null)
+    },
+    [engine, sequencer, setPromo],
+  )
+
+  const playersRef = useRef<ChessPlayer[]>([])
+  useEffect(() => {
+    playersRef.current = players
+  })
+
+  const reset = useCallback(() => {
+    botTokenRef.current += 1
+    engine.reset()
+    sequencer.rebase(0)
+    turnCountRef.current = 0
+    capturesRef.current = []
+    selectedRef.current = null
+    winnerIdRef.current = null
+    setPromo(null)
+    setPlayers([])
+    currentSeatRef.current = 0
+    setCurrentPlayerIndex(0)
+    setTurnCount(0)
+    setWinnerId(null)
+    setFinishedOrder([])
+    setDraw(false)
+    setWinReason(null)
+    setOutcome(null)
+    setInCheck(false)
+    historyRef.current = []
+    setHistory([])
+    setCaptured({ w: [], b: [] })
+    setFen(engine.fen())
+    phaseRef.current = 'setup'
+    setPhase('setup')
+    sceneRef.current?.setPlacements(engine.placements())
+    sceneRef.current?.setCheck(null)
+  }, [engine, sequencer, setPromo])
+
+  const applyRemoteStart = useCallback(
+    (lineup: { name: string; color: string }[]) => startGame(lineup),
+    [startGame],
+  )
+
+  const loadSnapshot = useCallback<ChessController['loadSnapshot']>(
+    (snap) => {
+      botTokenRef.current += 1
+      engine.load(snap.shared.fen)
+      sequencer.rebase(snap.turnCount)
+      turnCountRef.current = snap.turnCount
+      capturesRef.current = snap.shared.captures ?? []
+      selectedRef.current = null
+      setPromo(null)
+      setPlayers(
+        snap.players.slice(0, 2).map((p, i) => ({ id: i, name: p.name, color: p.color, isBot: false })),
+      )
+      const status = engine.status()
+      const seat = status.turn === 'w' ? 0 : 1
+      currentSeatRef.current = seat
+      setCurrentPlayerIndex(seat)
+      setTurnCount(snap.turnCount)
+      historyRef.current = snap.shared.history ?? []
+      setHistory(historyRef.current)
+      setCaptured(deriveCaptured())
+      setFen(engine.fen())
+      setInCheck(status.inCheck)
+      winnerIdRef.current = snap.shared.winnerId
+      setWinnerId(snap.shared.winnerId)
+      setFinishedOrder(snap.finishedOrder)
+      setDraw(snap.shared.draw)
+      setWinReason(snap.shared.winReason)
+      setOutcome(status.outcome ?? null)
+      phaseRef.current = snap.ended ? 'won' : 'idle'
+      setPhase(snap.ended ? 'won' : 'idle')
+      sceneRef.current?.setPlacements(engine.placements())
+      sceneRef.current?.setCheck(status.checkSquare ?? null)
+    },
+    [engine, sequencer, setPromo, deriveCaptured],
+  )
+
+  const forfeitWin = useCallback(
+    (winner: number) => {
+      if (phaseRef.current === 'setup' || phaseRef.current === 'won') return
+      const other = winner === 0 ? 1 : 0
+      winnerIdRef.current = winner
+      setWinnerId(winner)
+      setFinishedOrder([winner, other])
+      setDraw(false)
+      setWinReason('forfeit')
+      setOutcome(null)
+      phaseRef.current = 'won'
+      setPhase('won')
+      sceneRef.current?.celebrateWin(winner === 0 ? 'w' : 'b')
+      play('win')
+    },
+    [play],
+  )
+
+  // ---- remote events --------------------------------------------------------
+
+  const applyRemoteTurn = useCallback(
+    (resolution: ChessResolution, seq: number) => {
+      sequencer.accept({ kind: 'turn', resolution }, seq)
+    },
+    [sequencer],
+  )
+  // 2-player chess never skips (forfeit covers a leaver; the idle timer is off),
+  // but the contract needs the handler.
+  const applySkip = useCallback((seq: number) => {
+    void seq
+  }, [])
+  const applyRemoteDecision = useCallback((decision: MatchDecision, seq: number) => {
+    void decision
+    void seq
+  }, [])
+  const applyRemoteReset = reset
+  const addPlayer = useCallback((player: { name: string; color: string }) => {
+    void player
+  }, [])
+
+  const syncStatus = useCallback(
+    () => ({ seq: sequencer.seq, busy: sequencer.busy() }),
+    [sequencer],
+  )
+
+  // The full game-global state for an online snapshot's `shared` blob, so a late
+  // joiner / resync rebuilds the whole match (position, move list, captures,
+  // result) — not just the per-seat FEN.
+  const buildShared = useCallback(
+    (): ChessShared => ({
+      fen: engine.fen(),
+      history: [...historyRef.current],
+      captures: [...capturesRef.current],
+      winnerId: winnerIdRef.current,
+      draw,
+      winReason,
+    }),
+    [engine, draw, winReason],
+  )
+
+  // Wire the sequencer to this render's handlers.
+  useEffect(() => {
+    sequencer.update({
+      executeTurn,
+      executeSkip: () => {},
+      executeDecision: () => {},
+      committedCount: () => turnCountRef.current,
+      onOutOfSync: () => hooksRef.current?.onOutOfSync?.(),
+    })
+  })
+
+  // ---- computer opponent (local solo only) ----------------------------------
+
+  const botSeatToMove =
+    mode === 'solo' && phase === 'idle' && currentPlayerIndex === 1 && !outcome
+  useEffect(() => {
+    if (!botSeatToMove) return
+    const token = ++botTokenRef.current
+    const timer = setTimeout(() => {
+      if (token !== botTokenRef.current) return
+      if (phaseRef.current !== 'idle' || currentSeatRef.current !== 1) return
+      const intent = chooseMove(engine.fen(), difficultyRef.current)
+      if (intent) runLocalTurn(intent)
+    }, TIMING.aiThink * 1000)
+    return () => clearTimeout(timer)
+  }, [botSeatToMove, engine, runLocalTurn])
+
+  // ---- scene mount + local auto-start ---------------------------------------
+
   const attachScene = useCallback(
     (node: HTMLDivElement | null) => {
       if (node) {
@@ -258,6 +553,9 @@ export function useChessGame({ mode, difficulty: initialDifficulty }: Options): 
         sceneRef.current = scene
         scene.setPlacements(engine.placements())
         scene.setAutoRotate(autoRotateRef.current)
+        scene.setFlipped(flippedRef.current)
+        const status = engine.status()
+        scene.setCheck(status.checkSquare ?? null)
       } else {
         sceneRef.current?.dispose()
         sceneRef.current = null
@@ -266,26 +564,25 @@ export function useChessGame({ mode, difficulty: initialDifficulty }: Options): 
     [engine],
   )
 
-  // Keep the audio engine's mute state in sync.
+  // Local modes seat themselves once on mount; online seats come from the room.
+  const localPlayersRef = useRef(opts.localPlayers)
+  useEffect(() => {
+    if (mode !== 'online' && localPlayersRef.current) startGame(localPlayersRef.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   useEffect(() => {
     chessAudio.setMuted(muted)
   }, [muted])
 
+  // ---- HUD actions ----------------------------------------------------------
+
   const newGame = useCallback(() => {
-    tokenRef.current += 1
-    if (aiTimerRef.current) window.clearTimeout(aiTimerRef.current)
-    engine.reset()
-    capturesRef.current = []
-    selectedRef.current = null
-    setPromo(null)
-    setThinking(false)
-    setBusy(false)
-    sceneRef.current?.setPlacements(engine.placements())
-    refreshHud()
-  }, [engine, refreshHud, setBusy, setPromo])
+    startGame(playersRef.current.map((p) => ({ name: p.name, color: p.color, isBot: p.isBot })))
+  }, [startGame])
 
   const undo = useCallback(() => {
-    if (busyRef.current) return
+    if (mode === 'online' || phaseRef.current === 'moving' || phaseRef.current === 'setup') return
     const count = mode === 'solo' ? 2 : 1
     let undone = 0
     for (let i = 0; i < count; i++) {
@@ -293,12 +590,33 @@ export function useChessGame({ mode, difficulty: initialDifficulty }: Options): 
       else break
     }
     if (undone === 0) return
+    botTokenRef.current += 1
     for (let i = 0; i < undone; i++) capturesRef.current.pop()
+    turnCountRef.current = Math.max(0, turnCountRef.current - undone)
+    sequencer.rebase(turnCountRef.current)
     selectedRef.current = null
     setPromo(null)
+    const status = engine.status()
+    const seat = status.turn === 'w' ? 0 : 1
+    currentSeatRef.current = seat
+    setCurrentPlayerIndex(seat)
+    setTurnCount(turnCountRef.current)
+    setInCheck(status.inCheck)
+    historyRef.current = historyRef.current.slice(0, Math.max(0, historyRef.current.length - undone))
+    setHistory(historyRef.current)
+    setCaptured(deriveCaptured())
+    setFen(engine.fen())
+    setOutcome(null)
+    winnerIdRef.current = null
+    setWinnerId(null)
+    setFinishedOrder([])
+    setDraw(false)
+    setWinReason(null)
+    phaseRef.current = 'idle'
+    setPhase('idle')
     sceneRef.current?.setPlacements(engine.placements())
-    refreshHud()
-  }, [engine, mode, refreshHud, setPromo])
+    sceneRef.current?.setCheck(status.checkSquare ?? null)
+  }, [mode, engine, sequencer, setPromo, deriveCaptured])
 
   const flip = useCallback(() => {
     const next = !flippedRef.current
@@ -316,16 +634,14 @@ export function useChessGame({ mode, difficulty: initialDifficulty }: Options): 
 
   const toggleMute = useCallback(() => setMuted((m) => !m), [])
 
-  const setDifficulty = useCallback((d: Difficulty) => setDifficultyState(d), [])
-
   const choosePromotion = useCallback(
     (type: PieceType) => {
       const p = promotionRef.current
       if (!p) return
       setPromo(null)
-      executeMove(p.from, p.to, type)
+      runLocalTurn({ from: p.from, to: p.to, promotion: type })
     },
-    [executeMove, setPromo],
+    [runLocalTurn, setPromo],
   )
 
   const cancelPromotion = useCallback(() => {
@@ -333,34 +649,64 @@ export function useChessGame({ mode, difficulty: initialDifficulty }: Options): 
     clearSelection()
   }, [clearSelection, setPromo])
 
+  // ---- derived view ---------------------------------------------------------
+
   const advantage =
     captured.w.reduce((s, p) => s + PIECE_VALUE[p], 0) -
     captured.b.reduce((s, p) => s + PIECE_VALUE[p], 0)
+  const thinking = mode === 'solo' && phase === 'idle' && currentPlayerIndex === 1 && !outcome
+  const isMyTurn =
+    phase === 'idle' && (controlsPlayer === 'all' || controlsPlayer === currentPlayerIndex)
+  const standings = finishedOrder.map((id) => players[id]).filter((p): p is ChessPlayer => p != null)
 
   return {
     attachScene,
     mode,
-    difficulty,
-    turn,
+    difficulty: opts.difficulty ?? 'medium',
+    phase,
+    turn: currentPlayerIndex === 0 ? 'w' : 'b',
     inCheck,
     outcome,
     history,
     captured,
     advantage,
-    busy,
+    busy: phase === 'moving',
     thinking,
     promotion,
     flipped,
     muted,
     autoRotate,
-    canUndo: !busy && history.length > 0,
+    canUndo: mode !== 'online' && phase === 'idle' && history.length > 0,
+    isMyTurn,
+    controlsPlayer,
     newGame,
     undo,
     flip,
     toggleAutoRotate,
     toggleMute,
-    setDifficulty,
     choosePromotion,
     cancelPromotion,
+    players,
+    currentPlayerIndex,
+    turnCount,
+    winnerId,
+    finishedOrder,
+    draw,
+    winReason,
+    standings,
+    lastRoll: null,
+    skipFlash: null,
+    applyRemoteTurn,
+    applySkip,
+    applyRemoteDecision,
+    applyRemoteStart,
+    applyRemoteReset,
+    addPlayer,
+    forfeitWin,
+    syncStatus,
+    buildShared,
+    startGame,
+    loadSnapshot,
+    fen,
   }
 }

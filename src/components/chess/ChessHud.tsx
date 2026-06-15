@@ -9,25 +9,36 @@ import { m } from 'motion/react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '../../lib/cn'
 import type { ChessController } from '../../hooks/useChessGame'
+import type { ChessOnlineContext } from './ChessBoardView'
 import { ChessPieceGlyph } from './ChessPieceGlyph'
 
-export function ChessHud({ c }: { c: ChessController }) {
+export function ChessHud({ c, online }: { c: ChessController; online?: ChessOnlineContext }) {
   const { t } = useTranslation(['chess', 'common'])
 
   const turnLabel = c.thinking
     ? t('chess:turn.thinking')
-    : c.mode === 'solo'
-      ? c.turn === 'w'
-        ? t('chess:turn.your')
-        : t('chess:turn.thinking')
-      : c.turn === 'w'
-        ? t('chess:turn.white')
-        : t('chess:turn.black')
+    : online
+      ? online.spectator
+        ? c.turn === 'w'
+          ? t('chess:turn.white')
+          : t('chess:turn.black')
+        : c.isMyTurn
+          ? t('chess:turn.your')
+          : online.opponentAbsent
+            ? t('chess:turn.waiting', { name: online.opponentName })
+            : t('chess:turn.opponent', { name: online.opponentName })
+      : c.mode === 'solo'
+        ? c.turn === 'w'
+          ? t('chess:turn.your')
+          : t('chess:turn.thinking')
+        : c.turn === 'w'
+          ? t('chess:turn.white')
+          : t('chess:turn.black')
 
   return (
     <div className="pointer-events-none absolute inset-0 z-10">
       {/* Turn banner — hidden once the game is over (the overlay takes over). */}
-      {!c.outcome && (
+      {c.phase !== 'won' && (
         <m.div
           key={turnLabel}
           initial={{ opacity: 0, y: -10 }}
@@ -50,6 +61,16 @@ export function ChessHud({ c }: { c: ChessController }) {
         </m.div>
       )}
 
+      {/* Online: which side you are + the room code. */}
+      {online && c.phase !== 'won' && (
+        <div className="absolute left-1/2 top-[3.4rem] flex -translate-x-1/2 items-center gap-2 rounded-full bg-white/6 px-3 py-1 text-xs text-white/60 ring-1 ring-white/10 backdrop-blur">
+          {online.mySeat != null && (
+            <span>{online.mySeat === 0 ? t('chess:side.youAreWhite') : t('chess:side.youAreBlack')}</span>
+          )}
+          <span className="font-mono tracking-widest text-white/45">{online.roomCode}</span>
+        </div>
+      )}
+
       {/* Control cluster, top-right, below the language switcher. */}
       <div className="pointer-events-auto absolute end-4 top-16 flex flex-col items-end gap-2">
         <IconButton label={t('chess:controls.flip')} onClick={c.flip} ariaLabel={t('chess:controls.flipAria')}>
@@ -63,21 +84,25 @@ export function ChessHud({ c }: { c: ChessController }) {
         >
           🌀
         </IconButton>
-        <IconButton
-          label={t('common:actions.undo')}
-          onClick={c.undo}
-          ariaLabel={t('chess:controls.undoAria')}
-          disabled={!c.canUndo}
-        >
-          ↶
-        </IconButton>
-        <IconButton
-          label={t('common:actions.newGame')}
-          onClick={c.newGame}
-          ariaLabel={t('chess:controls.newGameAria')}
-        >
-          ♻
-        </IconButton>
+        {!online && (
+          <IconButton
+            label={t('common:actions.undo')}
+            onClick={c.undo}
+            ariaLabel={t('chess:controls.undoAria')}
+            disabled={!c.canUndo}
+          >
+            ↶
+          </IconButton>
+        )}
+        {!online && (
+          <IconButton
+            label={t('common:actions.newGame')}
+            onClick={c.newGame}
+            ariaLabel={t('chess:controls.newGameAria')}
+          >
+            ♻
+          </IconButton>
+        )}
         <IconButton
           label={c.muted ? t('common:actions.muted') : t('common:actions.sound')}
           onClick={c.toggleMute}

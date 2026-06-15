@@ -27,6 +27,18 @@ export class ChessEngine {
     this.chess.reset()
   }
 
+  /** Replace the position from a FEN (used when adopting an online snapshot).
+   *  Returns false on an invalid FEN. Move history is not preserved — only the
+   *  position, side to move, castling rights, en passant and clocks. */
+  load(fen: string): boolean {
+    try {
+      this.chess.load(fen)
+      return true
+    } catch {
+      return false
+    }
+  }
+
   fen(): string {
     return this.chess.fen()
   }

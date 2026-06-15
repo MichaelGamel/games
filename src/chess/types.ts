@@ -62,12 +62,56 @@ export interface GameStatus {
 
 export type Difficulty = 'easy' | 'medium' | 'hard'
 
-/** `solo` = play the computer; `pass` = two humans sharing one screen. */
-export type ChessMode = 'solo' | 'pass'
+/**
+ * `solo` = play the computer; `pass` = two humans on one screen; `online` =
+ * two humans across the network (White is seat 0, Black is seat 1).
+ */
+export type ChessMode = 'solo' | 'pass' | 'online'
 
 /** A move request the AI returns, ready to feed back into the engine. */
 export interface MoveIntent {
   from: Square
   to: Square
   promotion?: PieceType
+}
+
+/** Finite phases of a match (mirrors the other games' phase machines). */
+export type ChessPhase = 'setup' | 'idle' | 'moving' | 'won'
+
+/** Why a finished match ended (drives the result overlay copy). */
+export type ChessWinReason = 'mate' | 'forfeit' | null
+
+/** A seated player. White is always seat 0 (moves first), Black is seat 1. */
+export interface ChessPlayer {
+  id: number
+  name: string
+  color: string
+  isBot: boolean
+}
+
+/**
+ * The fully-resolved outcome of one move — the entire over-the-wire contract
+ * (`R`). Replayed identically on every client: each applies it to its own
+ * in-sync engine, which reproduces the same {@link MoveAnimation}.
+ */
+export interface ChessResolution {
+  from: Square
+  to: Square
+  promotion?: PieceType
+}
+
+/** Per-seat snapshot/heartbeat payload (`S`) — both seats carry the same FEN. */
+export interface ChessSeatState {
+  fen: string
+}
+
+/** Game-global snapshot blob (the net layer's opaque `shared`), so a late
+ *  joiner / resync rebuilds the full match, not just the board position. */
+export interface ChessShared {
+  fen: string
+  history: string[]
+  captures: Array<{ color: PieceColor; type: PieceType } | null>
+  winnerId: number | null
+  draw: boolean
+  winReason: ChessWinReason
 }
