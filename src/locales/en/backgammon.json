@@ -1,0 +1,29 @@
+{
+  "title": "Backgammon",
+  "tagline": "Roll, race your checkers home, and bear off first.",
+  "hubTagline": "Roll the dice, hit blots, and bear off first — head to head.",
+  "setupSubtitle": "Head to head. First to bear off all fifteen checkers wins.",
+  "menu": {
+    "localSubtitle": "Two players, one screen — or take on the computer.",
+    "onlineSubtitle": "Create or join a room and play a friend on another computer."
+  },
+  "confirm": "Confirm",
+  "pipCount": "Pip count",
+  "bar": "The bar",
+  "bearOff": "Bear-off tray",
+  "point": "Point {{n}}",
+  "status": {
+    "rolling": "{{name}} rolls the dice…",
+    "movePrompt": "Tap a checker, then where to move it.",
+    "confirmHint": "Move complete — tap Confirm.",
+    "movingFor": "{{name}} is moving…",
+    "yourRoll": "Your turn — roll the dice.",
+    "waitingFor": "Waiting for {{name}}…",
+    "turnRoll": "{{name}}'s turn — roll the dice.",
+    "wins": "{{name}} bears off and wins!",
+    "winsGammon": "{{name}} wins a gammon! (double)",
+    "winsBackgammon": "{{name}} wins a backgammon! (triple)"
+  },
+  "metaTitle": "Backgammon — Robin's Games",
+  "metaDescription": "Backgammon on Robin's Games — roll the dice, hit blots, race your checkers home and bear off. Play head-to-head on one screen or online in real time."
+}

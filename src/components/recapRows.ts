@@ -6,11 +6,13 @@ import { summarizeSnakes } from '../game/recap'
 import { summarizeLudo } from '../ludo/recap'
 import { summarizeUno } from '../uno/recap'
 import { summarizeBank } from '../bank/recap'
+import { summarizeBackgammon } from '../backgammon/recap'
 import type { MatchLog } from '../lib/matchLog'
 import type { SnakesRules, TurnResolution } from '../game/types'
 import type { LudoRules, LudoTurnResolution } from '../ludo/types'
 import type { UnoRules, UnoTurnResolution } from '../uno/types'
 import type { BankRules, BankTurnResolution } from '../bank/types'
+import type { BackgammonRules, BackgammonTurnResolution } from '../backgammon/types'
 import type { RecapRow } from './RecapPanel'
 
 export function snakesRecapRows(log: MatchLog<TurnResolution, SnakesRules>): RecapRow[] {
@@ -44,6 +46,19 @@ export function unoRecapRows(log: MatchLog<UnoTurnResolution, UnoRules>): RecapR
     if (p.wildsPlayed > 0) chips.push(`✦ ${p.wildsPlayed}`)
     if (p.unoCalls > 0) chips.push(`📣 ${p.unoCalls}`)
     if (p.penalties > 0) chips.push(`💢 ${p.penalties}`)
+    return { name: p.name, color: p.color, chips }
+  })
+}
+
+export function backgammonRecapRows(
+  log: MatchLog<BackgammonTurnResolution, BackgammonRules>,
+): RecapRow[] {
+  return summarizeBackgammon(log).players.map((p) => {
+    const chips: string[] = [`🎲 ${p.rolls}`]
+    if (p.doubles > 0) chips.push(`⚅ ${p.doubles}`)
+    if (p.hits > 0) chips.push(`⚔️ ${p.hits}`)
+    if (p.timesHit > 0) chips.push(`💥 ${p.timesHit}`)
+    if (p.borneOff > 0) chips.push(`🏁 ${p.borneOff}`)
     return { name: p.name, color: p.color, chips }
   })
 }

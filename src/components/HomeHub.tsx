@@ -6,6 +6,7 @@ import { Backdrop } from './Backdrop'
 import { LudoBoardIcon } from './ludo/LudoBoardIcon'
 import { XOBoardIcon } from './xo/XOBoardIcon'
 import { ChessIcon } from './chess/ChessIcon'
+import { BackgammonIcon } from './backgammon/BackgammonIcon'
 import { useDocumentMeta } from '../lib/useDocumentMeta'
 import { hallOfFame, type HallOfFameRow } from '../lib/stats'
 import { placeMedal } from '../lib/place'
@@ -45,7 +46,7 @@ const grid = {
 }
 
 export function HomeHub() {
-  const { t } = useTranslation(['common', 'snakes', 'ludo', 'four', 'uno', 'bank', 'xo', 'chess'])
+  const { t } = useTranslation(['common', 'snakes', 'ludo', 'four', 'uno', 'bank', 'xo', 'chess', 'backgammon'])
   useDocumentMeta({
     title: t('common:hub.metaTitle'),
     description: t('common:hub.metaDescription'),
@@ -107,6 +108,14 @@ export function HomeHub() {
       icon: <ChessIcon className="h-16 w-16 drop-shadow" />,
       to: '/chess',
       accent: 'from-grape/35 via-transparent to-violet-400/25',
+    },
+    {
+      id: 'backgammon',
+      title: t('backgammon:title'),
+      tagline: t('backgammon:hubTagline'),
+      icon: <BackgammonIcon className="h-16 w-16 drop-shadow" />,
+      to: '/backgammon',
+      accent: 'from-amber-600/30 via-transparent to-emerald-500/25',
     },
   ]
 
