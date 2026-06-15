@@ -5,6 +5,8 @@ import { useTranslation } from 'react-i18next'
 import App from './App'
 import { HomeHub } from './components/HomeHub'
 import { Backdrop } from './components/Backdrop'
+import { PwaUpdatePrompt } from './components/PwaUpdatePrompt'
+import { WakeLockManager } from './components/WakeLockManager'
 
 // Each game (and everything it pulls in) loads only when its route is visited,
 // so the hub and Snakes initial bundles never pay for the others.
@@ -49,6 +51,7 @@ export function Root() {
   return (
     <LazyMotion features={domAnimation} strict>
       <BrowserRouter>
+        <WakeLockManager />
         <Routes>
           <Route path="/" element={<HomeHub />} />
           <Route path="/snakes" element={<App />} />
@@ -94,6 +97,7 @@ export function Root() {
           />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        <PwaUpdatePrompt />
       </BrowserRouter>
     </LazyMotion>
   )

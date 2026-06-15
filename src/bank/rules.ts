@@ -31,9 +31,9 @@ export function rollDie(rng: Rng = Math.random): DieValue {
   return (Math.floor(rng() * DIE_FACES) + 1) as DieValue
 }
 
-/** Roll the two dice. Bank El-Hazz always moves the sum of two dice. */
-export function rollDice(rng: Rng = Math.random): [DieValue, DieValue] {
-  return [rollDie(rng), rollDie(rng)]
+/** Roll one or two dice (per the match rules); the move is their sum. */
+export function rollDice(count: 1 | 2, rng: Rng = Math.random): DieValue[] {
+  return Array.from({ length: count }, () => rollDie(rng))
 }
 
 /** Draw one card from a deck (its id is baked into the resolution). */
@@ -99,7 +99,8 @@ export function canAfford(seat: number, amount: number, cash: number[]): boolean
 
 export interface BankTurnContext {
   state: BankGameState
-  dice: [DieValue, DieValue]
+  /** The dice as rolled — one or two, per the match's `diceCount`. */
+  dice: DieValue[]
   /** Random source for the luck draw (injectable for tests). */
   rng?: Rng
   /**
@@ -447,7 +448,8 @@ export function resolveTurn(ctx: BankTurnContext): BankTurnResolution {
   const w = newWork(state, rng)
 
   const wasInJail = player.jailTurns > 0
-  const isDoubles = dice[0] === dice[1]
+  // Doubles only exist with two dice; a single die can never roll them.
+  const isDoubles = dice.length === 2 && dice[0] === dice[1]
   const doublesEnabled = state.rules.doubles === true
 
   // 0) A jailed player must first deal with jail (P2 richer jail). They either
@@ -500,7 +502,7 @@ export function resolveTurn(ctx: BankTurnContext): BankTurnResolution {
       w.currentTile = workGoToJail(w)
     } else {
       usedFastBus = player.fastBus === true
-      const total = (dice[0] + dice[1]) * (usedFastBus ? 2 : 1)
+      const total = dice.reduce((sum, d) => sum + d, 0) * (usedFastBus ? 2 : 1)
       w.currentTile = workMoveForward(w, w.currentTile, total)
       moved = true
     }

@@ -3,8 +3,10 @@ import { Dice3D } from '../../dice/Dice3D'
 import type { DieValue } from '../../../bank/types'
 
 interface BankCenterProps {
-  /** The last roll's two dice (empty before the first roll). */
+  /** The last roll's dice (empty before the first roll). */
   lastDice: DieValue[]
+  /** How many dice this match rolls (1 or 2) — fixes the cube count. */
+  diceCount: 1 | 2
   rolling: boolean
   /** Status line under the dice (whose turn / what's happening). */
   statusText: string
@@ -51,12 +53,12 @@ function DeckCard({ label, icon, tilt }: { label: string; icon: string; tilt: st
 /**
  * The board's center hub, filling the 9×6 interior of the 11×8 board: the bank
  * building + brand (in vintage red), the two tilted draw piles (حظك Luck ·
- * محاكمة Court), the two dice (the focal point of every roll — well spaced so the
- * cubes never touch), and the live turn/status line. Reuses the shared
- * {@link Dice3D} cube verbatim. Insets cover the interior exactly: x = 100/11 ≈
- * 9.09%, y = 100/8 = 12.5%.
+ * محاكمة Court), the dice (one or two, the focal point of every roll — well
+ * spaced so the cubes never touch), and the live turn/status line. Reuses the
+ * shared {@link Dice3D} cube verbatim. Insets cover the interior exactly:
+ * x = 100/11 ≈ 9.09%, y = 100/8 = 12.5%.
  */
-export function BankCenter({ lastDice, rolling, statusText, accentColor }: BankCenterProps) {
+export function BankCenter({ lastDice, diceCount, rolling, statusText, accentColor }: BankCenterProps) {
   const { t } = useTranslation('bank')
   return (
     <div className="pointer-events-none absolute inset-x-[9.0909%] inset-y-[12.5%] grid place-items-center">
@@ -71,8 +73,9 @@ export function BankCenter({ lastDice, rolling, statusText, accentColor }: BankC
         <div className="flex items-center gap-2 sm:gap-3.5">
           <DeckCard label={t('decks.luck')} icon="🎲" tilt="-rotate-6" />
           <div className="flex items-center gap-3 sm:gap-4">
-            <Dice3D value={lastDice[0] ?? null} rolling={rolling} size={46} />
-            <Dice3D value={lastDice[1] ?? null} rolling={rolling} size={46} />
+            {Array.from({ length: diceCount }, (_, i) => (
+              <Dice3D key={i} value={lastDice[i] ?? null} rolling={rolling} size={46} />
+            ))}
           </div>
           <DeckCard label={t('decks.court')} icon="⚖️" tilt="rotate-6" />
         </div>

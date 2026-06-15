@@ -9,13 +9,17 @@
     "tokenColor": "Token color",
     "roomCode": "Room code",
     "createRoom": "Create Room ▶",
-    "joinRoom": "Join Room ▶"
+    "joinRoom": "Join Room ▶",
+    "offlineTitle": "You're offline",
+    "offlineBody": "Online play needs an internet connection. You can still play pass-and-play."
   },
   "waiting": {
     "shareCode": "Share this code",
     "shareHint": "Friends enter it on the “Join room” screen.",
     "codeAria": "Room code {{code}}, click to copy",
     "copyInvite": "Copy invite link",
+    "shareInvite": "Share invite link",
+    "shareText": "Join my game on Robin's Games!",
     "linkCopied": "Link copied!",
     "joinedRoom": "Joined room",
     "waitingForPlayers": "Waiting for players… (need {{min}}+)",

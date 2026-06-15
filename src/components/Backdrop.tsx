@@ -12,7 +12,9 @@ interface BackdropProps {
  */
 export function Backdrop({ children }: BackdropProps) {
   return (
-    <div className="relative min-h-screen overflow-hidden bg-night-900 text-white">
+    <div
+      className="relative min-h-screen overflow-hidden bg-night-900 text-white pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] ps-[env(safe-area-inset-left)] pe-[env(safe-area-inset-right)]"
+    >
       {/* slowly panning gradient backdrop */}
       <div className="animate-gradient pointer-events-none absolute inset-0 bg-linear-to-br from-night-900 via-night-800 to-night-700 bg-[length:200%_200%]" />
       {/* soft floating blobs for depth */}

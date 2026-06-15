@@ -15,6 +15,8 @@ interface BankBoardProps {
   currentPlayerIndex: number
   phase: BankPhase
   lastDice: DieValue[]
+  /** Dice per roll for this match (1 or 2) — sets how many cubes show. */
+  diceCount: 1 | 2
   statusText: string
   /** Open a property's details / management modal (must be a stable callback). */
   onSelectTile?: (tileId: number) => void
@@ -101,6 +103,7 @@ export const BankBoard = memo(function BankBoard({
   currentPlayerIndex,
   phase,
   lastDice,
+  diceCount,
   statusText,
   onSelectTile,
 }: BankBoardProps) {
@@ -140,6 +143,7 @@ export const BankBoard = memo(function BankBoard({
 
       <BankCenter
         lastDice={lastDice}
+        diceCount={diceCount}
         rolling={phase === 'rolling'}
         statusText={statusText}
         accentColor={accent}

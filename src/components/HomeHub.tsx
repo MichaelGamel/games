@@ -9,6 +9,7 @@ import { useDocumentMeta } from '../lib/useDocumentMeta'
 import { hallOfFame, type HallOfFameRow } from '../lib/stats'
 import { placeMedal } from '../lib/place'
 import { LanguageSwitcher } from './LanguageSwitcher'
+import { useInstallPrompt } from '../lib/useInstallPrompt'
 import { cn } from '../lib/cn'
 
 /** One playable game on the hub. Adding a future game is a single array entry. */
@@ -107,7 +108,7 @@ export function HomeHub() {
         variants={page}
         initial="hidden"
         animate="show"
-        className="relative z-10 flex min-h-screen flex-col items-center justify-center gap-12 px-4 py-16"
+        className="relative z-10 flex min-h-dvh flex-col items-center justify-center gap-12 px-4 py-16"
       >
         <m.header variants={item} className="text-center">
           <m.h1
@@ -118,6 +119,7 @@ export function HomeHub() {
             <span aria-hidden="true">🎲</span> {t('common:hub.title')}
           </m.h1>
           <p className="mt-3 text-white/70">{t('common:hub.subtitle')}</p>
+          <InstallButton />
         </m.header>
 
         <m.ul
@@ -132,6 +134,31 @@ export function HomeHub() {
         <HallOfFame />
       </m.main>
     </Backdrop>
+  )
+}
+
+/**
+ * "Install app" button — only rendered once the browser fires
+ * `beforeinstallprompt` (so it's hidden on unsupported browsers, iOS Safari,
+ * and after the app is already installed). Tapping it opens the native prompt.
+ */
+function InstallButton() {
+  const { t } = useTranslation('common')
+  const { canInstall, promptInstall } = useInstallPrompt()
+  if (!canInstall) return null
+  return (
+    <m.button
+      type="button"
+      onClick={promptInstall}
+      aria-label={t('pwa.installAria')}
+      initial={{ opacity: 0, y: -6 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={{ scale: 1.05 }}
+      whileTap={{ scale: 0.97 }}
+      className="mt-5 inline-flex items-center gap-2 rounded-full bg-white/10 px-5 py-2.5 text-sm font-semibold text-white ring-1 ring-white/20 backdrop-blur transition hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+    >
+      <span aria-hidden="true">📲</span> {t('pwa.install')}
+    </m.button>
   )
 }
 

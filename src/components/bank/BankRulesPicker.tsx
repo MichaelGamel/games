@@ -1,6 +1,11 @@
 import { useTranslation } from 'react-i18next'
 import type { ReactNode } from 'react'
-import { MAX_ROUNDS_OPTIONS, PASS_START_OPTIONS, START_CASH_OPTIONS } from '../../bank/config'
+import {
+  DICE_COUNT_OPTIONS,
+  MAX_ROUNDS_OPTIONS,
+  PASS_START_OPTIONS,
+  START_CASH_OPTIONS,
+} from '../../bank/config'
 import type { BankRules } from '../../bank/types'
 import { cn } from '../../lib/cn'
 
@@ -52,14 +57,27 @@ export function BankRulesPicker({ value, onChange, compact }: BankRulesPickerPro
           />
         </RuleRow>
 
-        <RuleRow label={t('rules.doubles')} hint={t('rules.doublesHint')}>
+        <RuleRow label={t('rules.dice')} hint={t('rules.diceHint')}>
           <Segment
-            options={[
-              { label: t('rules.off'), selected: !value.doubles, onPick: () => set({ doubles: false }) },
-              { label: t('rules.on'), selected: value.doubles, onPick: () => set({ doubles: true }) },
-            ]}
+            options={DICE_COUNT_OPTIONS.map((n) => ({
+              label: t(n === 1 ? 'rules.oneDie' : 'rules.twoDice'),
+              selected: value.diceCount === n,
+              onPick: () => set({ diceCount: n }),
+            }))}
           />
         </RuleRow>
+
+        {/* Doubles only mean something with two dice — hide the rule otherwise. */}
+        {value.diceCount === 2 && (
+          <RuleRow label={t('rules.doubles')} hint={t('rules.doublesHint')}>
+            <Segment
+              options={[
+                { label: t('rules.off'), selected: !value.doubles, onPick: () => set({ doubles: false }) },
+                { label: t('rules.on'), selected: value.doubles, onPick: () => set({ doubles: true }) },
+              ]}
+            />
+          </RuleRow>
+        )}
 
         <RuleRow label={t('rules.length')} hint={t('rules.lengthHint')}>
           <Segment

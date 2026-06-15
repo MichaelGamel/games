@@ -151,10 +151,19 @@ export function WaitingRoom({
   }
 
   // One-tap invite: a deep link that opens this game's lobby with the code
-  // pre-filled on the Join tab (`?room=CODE`, handled by each game's App).
+  // pre-filled on the Join tab (`?room=CODE`, handled by each game's App). On
+  // devices with the Web Share API this opens the native share sheet; elsewhere
+  // it falls back to copying the link to the clipboard.
   const [linkCopied, setLinkCopied] = useState(false)
-  const copyInviteLink = () => {
+  const canShare = typeof navigator.share === 'function'
+  const shareInvite = () => {
     const url = `${window.location.origin}${window.location.pathname}?room=${code}`
+    if (canShare) {
+      navigator
+        .share({ title: t('common:appName'), text: t('online:waiting.shareText'), url })
+        .catch(() => {})
+      return
+    }
     navigator.clipboard
       ?.writeText(url)
       .then(() => {
@@ -170,7 +179,7 @@ export function WaitingRoom({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
-      className="relative z-10 flex min-h-screen flex-col items-center justify-center gap-6 px-4 py-10"
+      className="relative z-10 flex min-h-dvh flex-col items-center justify-center gap-6 px-4 py-10"
     >
       <button
         type="button"
@@ -219,11 +228,15 @@ export function WaitingRoom({
                 </button>
                 <button
                   type="button"
-                  onClick={copyInviteLink}
+                  onClick={shareInvite}
                   className="mx-auto mt-3 flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-white/70 ring-1 ring-white/15 transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
                 >
                   <span aria-hidden="true">🔗</span>
-                  {linkCopied ? t('online:waiting.linkCopied') : t('online:waiting.copyInvite')}
+                  {canShare
+                    ? t('online:waiting.shareInvite')
+                    : linkCopied
+                      ? t('online:waiting.linkCopied')
+                      : t('online:waiting.copyInvite')}
                 </button>
               </>
             ) : (

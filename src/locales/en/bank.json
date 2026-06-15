@@ -154,6 +154,7 @@
   "log": {
     "title": "Game log",
     "rolled": "🎲 {{name}} rolled {{a}} + {{b}}",
+    "rolledOne": "🎲 {{name}} rolled {{a}}",
     "doubles": "🎲🎲 {{name}} rolled doubles — rolls again!",
     "fastBusRide": "🚌 {{name}}'s roll is doubled!",
     "passStart": "🏁 {{name}} passed Start (+{{amount}} LE)",
@@ -185,6 +186,10 @@
   "rules": {
     "startCash": "Starting cash",
     "passReward": "Pass Start",
+    "dice": "Dice",
+    "diceHint": "how many you roll",
+    "oneDie": "1 die",
+    "twoDice": "2 dice",
     "doubles": "Doubles",
     "doublesHint": "roll again; 3 in a row → jail",
     "jailFine": "Jail fine",

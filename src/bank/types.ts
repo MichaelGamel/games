@@ -212,7 +212,10 @@ export type WinReason = 'lastStanding' | 'forfeit' | 'rounds'
 export interface BankRules {
   startCash: number
   passStartReward: number
-  /** P2: a roll of doubles grants an extra turn. */
+  /** Dice per roll. One die (the default) moves that value and never rolls
+   *  doubles; two dice move the sum, and *doubles* grant the extra turn. */
+  diceCount: 1 | 2
+  /** P2: a roll of doubles grants an extra turn (two dice only). */
   doubles: boolean
   /** P2: the fee to leave jail. */
   jailFine: number
@@ -280,7 +283,8 @@ export type BankTurnResolution =
   | {
       type: 'roll'
       seat: number
-      dice: [DieValue, DieValue]
+      /** The dice as rolled (one or two, per the match's `diceCount`). */
+      dice: DieValue[]
       /** True when this roll's total was doubled by a held Fast Bus buff. */
       usedFastBus: boolean
       effects: TurnEffect[]

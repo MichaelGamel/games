@@ -78,7 +78,7 @@ export function UnoSetupScreen({ onStart, onBack }: UnoSetupScreenProps) {
       initial="hidden"
       animate="show"
       exit={{ opacity: 0, y: -24, transition: { duration: 0.25 } }}
-      className="relative z-10 flex min-h-screen flex-col items-center justify-center gap-8 px-4 py-10"
+      className="relative z-10 flex min-h-dvh flex-col items-center justify-center gap-8 px-4 py-10"
     >
       {onBack && (
         <m.button

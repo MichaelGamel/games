@@ -54,7 +54,10 @@ function playMatch(
   let state = bankReducer(initialBankState, { type: 'START_GAME', players, rules })
   for (let i = 0; i < cap && state.phase !== 'won'; i++) {
     if (state.phase === 'idle') {
-      state = bankReducer(state, { type: 'COMMIT_TURN', resolution: resolveTurn({ state, dice: rollDice(rng), rng }) })
+      state = bankReducer(state, {
+        type: 'COMMIT_TURN',
+        resolution: resolveTurn({ state, dice: rollDice(state.rules.diceCount, rng), rng }),
+      })
     } else if (state.phase === 'deciding' && state.pendingBuy) {
       const { seat, tile, price } = state.pendingBuy
       const decision = chooseBuyDecision(state, seat, tile, price, state.players[seat]?.botLevel ?? 'easy')
@@ -97,7 +100,7 @@ describe('bank full-match simulation', () => {
 
   it('a lean economy bankrupts everyone but one (last standing)', () => {
     // Low cash + no pass reward starves players fast, so the match resolves.
-    const lean: BankRules = { startCash: 400, passStartReward: 0, doubles: true, jailFine: 50, maxRounds: null }
+    const lean: BankRules = { startCash: 400, passStartReward: 0, diceCount: 2, doubles: true, jailFine: 50, maxRounds: null }
     const players: PlayerSetup[] = [
       { name: 'A', color: '#f00', isBot: true, botLevel: 'hard' },
       { name: 'B', color: '#0f0', isBot: true, botLevel: 'easy' },
@@ -111,7 +114,7 @@ describe('bank full-match simulation', () => {
   })
 
   it('a round cap ends a timed match with a declared winner', () => {
-    const timed: BankRules = { startCash: 1500, passStartReward: 200, doubles: true, jailFine: 50, maxRounds: 5 }
+    const timed: BankRules = { startCash: 1500, passStartReward: 200, diceCount: 2, doubles: true, jailFine: 50, maxRounds: 5 }
     const players: PlayerSetup[] = [
       { name: 'A', color: '#f00', isBot: true, botLevel: 'hard' },
       { name: 'B', color: '#0f0', isBot: true, botLevel: 'easy' },

@@ -420,7 +420,7 @@ export function useBankElHazz({ controlsPlayer = 'all', hooks }: UseBankOptions 
         }
 
         const alive = sequencer.beginRun()
-        const dice = rollDice()
+        const dice = rollDice(snap.rules.diceCount)
         dispatch({ type: 'BEGIN_ROLL', dice })
         sound.playRoll()
         await delay(timings.dice)
@@ -764,9 +764,9 @@ export function useBankElHazz({ controlsPlayer = 'all', hooks }: UseBankOptions 
     // Bank, bankrupt players (Ludo's `finishedOrder` are winners; here they are
     // the eliminated). The net layer only uses it to skip non-racing seats.
     finishedOrder: state.bankruptedOrder,
-    // The last roll's total (sum of the two dice), or null before the first roll
-    // / after a resync — the shape the online snapshot/heartbeat expects.
-    lastRoll: state.lastDice.length === 2 ? state.lastDice[0] + state.lastDice[1] : null,
+    // The last roll's total (sum of one or two dice), or null before the first
+    // roll / after a resync — the shape the online snapshot/heartbeat expects.
+    lastRoll: state.lastDice.length > 0 ? state.lastDice.reduce((a, b) => a + b, 0) : null,
     activeMove,
     cardReveal,
     matchLog,

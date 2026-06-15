@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { TOKEN_COLORS, type ColorOption } from '../../game/config'
 import type { PlayerProfile, Role } from '../../net/types'
 import { loadLocal, saveLocal } from '../../lib/storage'
+import { useOnline } from '../../lib/useOnline'
 import { cn } from '../../lib/cn'
 
 export interface RoomParams {
@@ -61,7 +62,10 @@ export function OnlineLobby({ onBack, onStart, initial, initialCode, colors }: O
   })
   const [code, setCode] = useState(initial?.code ?? initialCode ?? '')
 
-  const joinDisabled = tab === 'join' && code.trim().length < 4
+  // Both creating and joining open a live Realtime connection, so the whole
+  // lobby is gated while offline; local pass-and-play is unaffected.
+  const offline = !useOnline()
+  const submitDisabled = (tab === 'join' && code.trim().length < 4) || offline
 
   const handleSubmit = () => {
     const cleanName = name.trim() || t('online:lobby.namePlaceholder')
@@ -81,7 +85,7 @@ export function OnlineLobby({ onBack, onStart, initial, initialCode, colors }: O
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
-      className="relative z-10 flex min-h-screen flex-col items-center justify-center gap-6 px-4 py-10"
+      className="relative z-10 flex min-h-dvh flex-col items-center justify-center gap-6 px-4 py-10"
     >
       <button
         type="button"
@@ -97,6 +101,16 @@ export function OnlineLobby({ onBack, onStart, initial, initialCode, colors }: O
         </h1>
         <p className="mt-2 text-white/70">{t('online:lobby.subtitle')}</p>
       </header>
+
+      {offline && (
+        <div
+          role="status"
+          className="w-full max-w-sm rounded-2xl bg-amber-400/10 p-4 text-center ring-1 ring-amber-300/30"
+        >
+          <p className="text-sm font-semibold text-amber-200">{t('online:lobby.offlineTitle')}</p>
+          <p className="mt-1 text-xs text-white/70">{t('online:lobby.offlineBody')}</p>
+        </div>
+      )}
 
       <div className="w-full max-w-sm rounded-2xl bg-white/5 p-6 ring-1 ring-white/10 backdrop-blur">
         {/* Create / Join toggle */}
@@ -173,13 +187,13 @@ export function OnlineLobby({ onBack, onStart, initial, initialCode, colors }: O
         <m.button
           type="button"
           onClick={handleSubmit}
-          disabled={joinDisabled}
-          whileHover={joinDisabled ? undefined : { scale: 1.03 }}
-          whileTap={joinDisabled ? undefined : { scale: 0.97 }}
+          disabled={submitDisabled}
+          whileHover={submitDisabled ? undefined : { scale: 1.03 }}
+          whileTap={submitDisabled ? undefined : { scale: 0.97 }}
           className={cn(
             'w-full rounded-xl bg-linear-to-r from-grape to-grape-light px-6 py-3 text-lg font-bold text-white shadow-lg ring-1 ring-white/20 transition',
             'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white',
-            joinDisabled && 'cursor-not-allowed opacity-50',
+            submitDisabled && 'cursor-not-allowed opacity-50',
           )}
         >
           {tab === 'create' ? t('online:lobby.createRoom') : t('online:lobby.joinRoom')}

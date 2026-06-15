@@ -154,6 +154,7 @@
   "log": {
     "title": "سجل اللعبة",
     "rolled": "🎲 {{name}} رمى {{a}} + {{b}}",
+    "rolledOne": "🎲 {{name}} رمى {{a}}",
     "doubles": "🎲🎲 {{name}} حصل على زوج — يرمي مجددًا!",
     "fastBusRide": "🚌 رمية {{name}} مضاعفة!",
     "passStart": "🏁 {{name}} مرّ بالبداية (+{{amount}} جنيه)",
@@ -185,6 +186,10 @@
   "rules": {
     "startCash": "النقود الابتدائية",
     "passReward": "المرور بالبداية",
+    "dice": "النرد",
+    "diceHint": "كم حبة ترمي",
+    "oneDie": "حبة واحدة",
+    "twoDice": "حبتان",
     "doubles": "الأزواج",
     "doublesHint": "ارمِ مجددًا؛ ٣ متتالية → السجن",
     "jailFine": "غرامة السجن",

@@ -31,7 +31,7 @@ export function LudoMainMenu({ onLocal, onOnline, onlineEnabled }: LudoMainMenuP
       initial="hidden"
       animate="show"
       exit={{ opacity: 0, y: -24, transition: { duration: 0.25 } }}
-      className="relative z-10 flex min-h-screen flex-col items-center justify-center gap-10 px-4 py-10"
+      className="relative z-10 flex min-h-dvh flex-col items-center justify-center gap-10 px-4 py-10"
     >
       <BackToHubLink />
       <LanguageSwitcher className="absolute end-4 top-4 z-20" />

@@ -93,5 +93,14 @@
     "stay": "Keep Playing 🎲",
     "leave": "Leave Game"
   },
+  "pwa": {
+    "updateMessage": "A new version is available.",
+    "reload": "Reload",
+    "offlineReady": "Ready to play offline 🎉",
+    "dismiss": "Dismiss",
+    "install": "Install app",
+    "installAria": "Install Robin's Games as an app",
+    "installHintIos": "To install: tap Share, then “Add to Home Screen”."
+  },
   "loading": "Loading…"
 }

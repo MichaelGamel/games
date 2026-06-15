@@ -87,7 +87,11 @@ function buildLines(
     // but moves no dice, so it skips the "rolled a+b" / Fast Bus opener.
     const name = nameOf(r.seat)
     if (r.type === 'roll') {
-      push(t('log.rolled', { name, a: r.dice[0], b: r.dice[1] }))
+      push(
+        r.dice.length === 1
+          ? t('log.rolledOne', { name, a: r.dice[0] })
+          : t('log.rolled', { name, a: r.dice[0], b: r.dice[1] }),
+      )
       if (r.usedFastBus) push(t('log.fastBusRide', { name }))
     }
     for (const effect of r.effects) {

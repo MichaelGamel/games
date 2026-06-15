@@ -614,3 +614,25 @@ describe('trading — validity and builder (P4)', () => {
     expect(canTrade(s, { from: 0, to: 1, giveTiles: [4], giveCash: 0, receiveTiles: [21], receiveCash: 0 })).toBe(false)
   })
 })
+
+// --- single-die mode -------------------------------------------------------
+
+describe('resolveTurn — one die', () => {
+  /** A one-die state (the default), rolling from `position`. */
+  const oneDie = (position: number) =>
+    makeState([player(0, position, 1500)], { rules: { ...DEFAULT_BANK_RULES, diceCount: 1 } })
+
+  it('moves the single die value', () => {
+    const r = resolveTurn({ state: oneDie(0), dice: [5] })
+    if (r.type !== 'roll') throw new Error('expected a roll resolution')
+    expect(r.finalTile).toBe(5)
+  })
+
+  it('never grants an extra turn — a single die has no doubles', () => {
+    // A 6 would be doubles' lone-die analogue, but Bank's extra turn is doubles-only.
+    const r = resolveTurn({ state: oneDie(0), dice: [6] })
+    if (r.type !== 'roll') throw new Error('expected a roll resolution')
+    expect(r.extraTurn).toBe(false)
+    expect(r.doublesCount).toBe(0)
+  })
+})

@@ -42,6 +42,8 @@ export const START_CASH_OPTIONS = [1000, 1500, 2000] as const
 export const PASS_START_OPTIONS = [100, 200, 300] as const
 /** Selectable round caps for timed mode in the setup rules picker (P2). */
 export const MAX_ROUNDS_OPTIONS = [10, 20, 30] as const
+/** Selectable dice-per-roll counts. One die is the default (no doubles). */
+export const DICE_COUNT_OPTIONS = [1, 2] as const
 
 /**
  * Building levels (P3 upgrades): 0 = bare lot, 1–3 = houses, 4 = a hotel. Stored
@@ -230,10 +232,12 @@ export const DEFAULT_BANK_PLAYERS: readonly PlayerPreset[] = [
   { name: 'Player 2', color: BANK_COLORS[1].value },
 ]
 
-/** The canonical game: classic cash + reward, doubles on, last-player-standing. */
+/** The canonical game: one die, classic cash + reward, doubles on (for two
+ *  dice), last-player-standing. */
 export const DEFAULT_BANK_RULES: Readonly<BankRules> = {
   startCash: START_CASH,
   passStartReward: PASS_START_REWARD,
+  diceCount: 1,
   doubles: true,
   jailFine: JAIL_FINE,
   maxRounds: null,
@@ -253,6 +257,7 @@ export function asBankRules(value: unknown): BankRules {
       typeof v.passStartReward === 'number' && v.passStartReward >= 0
         ? v.passStartReward
         : PASS_START_REWARD,
+    diceCount: v.diceCount === 2 ? 2 : 1,
     doubles: v.doubles === true,
     jailFine: typeof v.jailFine === 'number' && v.jailFine >= 0 ? v.jailFine : JAIL_FINE,
     maxRounds: typeof v.maxRounds === 'number' && v.maxRounds > 0 ? v.maxRounds : null,

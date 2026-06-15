@@ -28,7 +28,7 @@ const log: BankMatchLog = {
     { name: 'A', color: '#f00' },
     { name: 'B', color: '#0f0' },
   ],
-  rules: { startCash: 1500, passStartReward: 200, doubles: true, jailFine: 50, maxRounds: null },
+  rules: { startCash: 1500, passStartReward: 200, diceCount: 2, doubles: true, jailFine: 50, maxRounds: null },
   events: [
     {
       kind: 'turn',

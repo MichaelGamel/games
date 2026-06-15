@@ -76,6 +76,7 @@ export function BankGameScreen({ game, onNewGame, online }: BankGameScreenProps)
             currentPlayerIndex={game.currentPlayerIndex}
             phase={game.phase}
             lastDice={game.lastDice}
+            diceCount={game.rules.diceCount}
             statusText={statusText}
             onSelectTile={setSelectedTile}
           />
@@ -234,7 +235,9 @@ function computeRollLabel(game: BankController, t: ScreenT, online: OnlineMeta |
   if (online && !online.canPlay) return t('common:game.waiting')
   if (online && !game.isMyTurn)
     return t('common:game.opponentsTurn', { name: game.currentPlayer?.name ?? '?' })
-  if (game.inJail) return t('bank:controls.rollDoubles')
+  // With one die there are no doubles to aim for — a jailed player just rolls
+  // (failed attempts are burned until they're forced to pay the fine).
+  if (game.inJail) return t(game.rules.diceCount === 2 ? 'bank:controls.rollDoubles' : 'bank:controls.roll')
   if (game.consecutiveDoubles > 0) return t('bank:controls.rollAgain')
   return t('bank:controls.roll')
 }
