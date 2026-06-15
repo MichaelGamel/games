@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { Backdrop } from './Backdrop'
 import { LudoBoardIcon } from './ludo/LudoBoardIcon'
 import { XOBoardIcon } from './xo/XOBoardIcon'
+import { ChessIcon } from './chess/ChessIcon'
 import { useDocumentMeta } from '../lib/useDocumentMeta'
 import { hallOfFame, type HallOfFameRow } from '../lib/stats'
 import { placeMedal } from '../lib/place'
@@ -44,7 +45,7 @@ const grid = {
 }
 
 export function HomeHub() {
-  const { t } = useTranslation(['common', 'snakes', 'ludo', 'four', 'uno', 'bank', 'xo'])
+  const { t } = useTranslation(['common', 'snakes', 'ludo', 'four', 'uno', 'bank', 'xo', 'chess'])
   useDocumentMeta({
     title: t('common:hub.metaTitle'),
     description: t('common:hub.metaDescription'),
@@ -98,6 +99,14 @@ export function HomeHub() {
       icon: <XOBoardIcon className="h-16 w-16 drop-shadow" />,
       to: '/xo',
       accent: 'from-rose-500/30 via-transparent to-sky-400/25',
+    },
+    {
+      id: 'chess',
+      title: t('chess:title'),
+      tagline: t('chess:hubTagline'),
+      icon: <ChessIcon className="h-16 w-16 drop-shadow" />,
+      to: '/chess',
+      accent: 'from-grape/35 via-transparent to-violet-400/25',
     },
   ]
 

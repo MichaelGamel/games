@@ -25,6 +25,9 @@ const BankApp = lazy(() =>
 const XOApp = lazy(() =>
   import('./components/xo/XOApp').then((m) => ({ default: m.XOApp })),
 )
+const ChessApp = lazy(() =>
+  import('./components/chess/ChessApp').then((m) => ({ default: m.ChessApp })),
+)
 
 function RouteFallback() {
   const { t } = useTranslation()
@@ -92,6 +95,14 @@ export function Root() {
             element={
               <Suspense fallback={<RouteFallback />}>
                 <XOApp />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/chess"
+            element={
+              <Suspense fallback={<RouteFallback />}>
+                <ChessApp />
               </Suspense>
             }
           />

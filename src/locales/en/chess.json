@@ -1,0 +1,69 @@
+{
+  "title": "Chess",
+  "tagline": "A living 3D board. Outwit the machine.",
+  "hubTagline": "Sculpted 3D pieces — face the computer or a friend.",
+  "metaTitle": "Chess — Robin's Games",
+  "metaDescription": "Play chess on Robin's Games — a fully 3D, animated board with sculpted pieces. Challenge the computer at three levels or play a friend on one screen.",
+  "menu": {
+    "solo": "Vs Computer",
+    "soloSubtitle": "Take on the bot — three levels of cunning.",
+    "pass": "Two Players",
+    "passSubtitle": "Share one screen and trade blows in 3D.",
+    "difficulty": "Difficulty",
+    "start": "Enter the Board ▶"
+  },
+  "difficulty": {
+    "easy": "Easy",
+    "medium": "Medium",
+    "hard": "Hard"
+  },
+  "side": {
+    "white": "White",
+    "black": "Black",
+    "computer": "Computer",
+    "you": "You"
+  },
+  "turn": {
+    "your": "Your move",
+    "white": "White to move",
+    "black": "Black to move",
+    "thinking": "Computer is thinking…"
+  },
+  "hud": {
+    "check": "Check!",
+    "moves": "Moves",
+    "captures": "Captures",
+    "noMoves": "The board awaits your first move.",
+    "advantage": "+{{n}}"
+  },
+  "controls": {
+    "flip": "Flip",
+    "flipAria": "Flip the board",
+    "spin": "Spin",
+    "spinAria": "Toggle idle camera auto-rotation",
+    "newGameAria": "Start a new game",
+    "undoAria": "Take back your last move",
+    "rotateHint": "Drag to orbit • tap a piece, then its destination"
+  },
+  "promotion": {
+    "title": "Promote your pawn"
+  },
+  "over": {
+    "checkmate": "Checkmate!",
+    "youWin": "You win the crown! 👑",
+    "youLose": "The computer mates you.",
+    "whiteWins": "White wins by checkmate!",
+    "blackWins": "Black wins by checkmate!",
+    "stalemate": "Stalemate",
+    "stalemateBody": "No legal moves — the game is a draw.",
+    "draw": "Draw",
+    "drawInsufficient": "Not enough material left to checkmate.",
+    "drawThreefold": "Draw by threefold repetition.",
+    "drawFifty": "Draw by the fifty-move rule.",
+    "again": "Play Again",
+    "menu": "Back to Menu"
+  },
+  "a11y": {
+    "board": "Interactive 3D chess board"
+  }
+}
