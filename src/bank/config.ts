@@ -97,7 +97,8 @@ export const BOARD: readonly BankTile[] = [
   // left edge (bottom → top): 0 Start … 7 Lucky Club
   property(1, 'alquds', 'B', 90, 9),
   property(2, 'gaza', 'B', 250, 25),
-  { id: 3, kind: 'luck', nameKey: 'luck' },
+  // A "Luck or Court" cell — the player chooses which deck to draw from.
+  { id: 3, kind: 'choice', nameKey: 'cardChoice' },
   property(4, 'beirut', 'A', 300, 30),
   property(5, 'riyadh', 'A', 250, 25),
   property(6, 'baghdad', 'A', 250, 25),

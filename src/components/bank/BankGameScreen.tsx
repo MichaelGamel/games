@@ -14,6 +14,7 @@ import { BankPropertyModal } from './BankPropertyModal'
 import { BankTradeModal } from './BankTradeModal'
 import { BankBuyModal } from './BankBuyModal'
 import { BankCardModal } from './BankCardModal'
+import { BankCardChoiceModal } from './BankCardChoiceModal'
 
 interface BankGameScreenProps {
   game: BankController
@@ -144,6 +145,14 @@ export function BankGameScreen({ game, onNewGame, online }: BankGameScreenProps)
             accentColor={game.players[pending.seat]?.color ?? '#f59e0b'}
             onBuy={game.decideBuy}
             onSkip={game.decideDecline}
+          />
+        )}
+
+        {game.canChooseCard && game.pendingChoice && (
+          <BankCardChoiceModal
+            key="choice"
+            accentColor={game.players[game.pendingChoice.seat]?.color ?? '#f59e0b'}
+            onChoose={game.chooseCard}
           />
         )}
 

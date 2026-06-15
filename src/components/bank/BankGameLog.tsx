@@ -83,10 +83,13 @@ function buildLines(
       return
     }
 
-    // r.type === 'roll'
+    // r.type === 'roll' | 'cardDraw' — a card draw shares the roll's effect feed
+    // but moves no dice, so it skips the "rolled a+b" / Fast Bus opener.
     const name = nameOf(r.seat)
-    push(t('log.rolled', { name, a: r.dice[0], b: r.dice[1] }))
-    if (r.usedFastBus) push(t('log.fastBusRide', { name }))
+    if (r.type === 'roll') {
+      push(t('log.rolled', { name, a: r.dice[0], b: r.dice[1] }))
+      if (r.usedFastBus) push(t('log.fastBusRide', { name }))
+    }
     for (const effect of r.effects) {
       switch (effect.kind) {
         case 'passStart':

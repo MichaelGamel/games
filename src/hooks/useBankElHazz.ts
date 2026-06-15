@@ -44,6 +44,7 @@ import {
   canTrade,
   canUnmortgage,
   resolveBuyDecision,
+  resolveCardDraw,
   resolveDecline,
   resolveTurn,
   rollDice,
@@ -246,19 +247,22 @@ export function useBankElHazz({ controlsPlayer = 'all', hooks }: UseBankOptions 
         return
       }
 
-      // resolution.type === 'roll'
+      // resolution.type === 'roll' | 'cardDraw'. A `cardDraw` (the chosen-deck
+      // draw on a "Luck or Court" cell) shares the roll's effect animation but
+      // tumbles no dice — the dice already settled on the paused roll.
       const { seat } = resolution
       if (!stateRef.current.players[seat]) return
 
-      // 1) Tumble the dice (unless the local roll already did).
-      if (!opts?.skipRoll) {
+      // 1) Tumble the dice (a fresh roll only, unless the local roll already did).
+      if (resolution.type === 'roll' && !opts?.skipRoll) {
         dispatch({ type: 'BEGIN_ROLL', dice: resolution.dice })
         sound.playRoll()
         await delay(timings.dice)
         if (!alive()) return
       }
       // A held Fast Bus buff just doubled this roll — celebrate the ×2.
-      if (resolution.usedFastBus) rollFlash.trigger(seat, 1500, { reason: 'usedFastBus' })
+      if (resolution.type === 'roll' && resolution.usedFastBus)
+        rollFlash.trigger(seat, 1500, { reason: 'usedFastBus' })
 
       // 2) Play every effect in order.
       dispatch({ type: 'BEGIN_MOVE' })
@@ -358,8 +362,9 @@ export function useBankElHazz({ controlsPlayer = 'all', hooks }: UseBankOptions 
       setCardReveal(null)
       commitResolution(resolution)
       if (resolution.isWin) sound.playWin()
-      // Rolling doubles earns another turn — a quick "roll again!" cheer.
-      else if (resolution.extraTurn) {
+      // Rolling doubles earns another turn — a quick "roll again!" cheer. Hold it
+      // on a roll that paused for a deck choice; the follow-up `cardDraw` cheers.
+      else if (resolution.extraTurn && !(resolution.type === 'roll' && resolution.cardChoice)) {
         sound.playExtraTurn()
         rollFlash.trigger(seat, 1500, { reason: 'doubles' })
       }
@@ -473,6 +478,29 @@ export function useBankElHazz({ controlsPlayer = 'all', hooks }: UseBankOptions 
 
   const decideBuy = useCallback(() => decide('buy'), [decide])
   const decideDecline = useCallback(() => decide('decline'), [decide])
+
+  /**
+   * Resolve an open "Luck or Court" deck choice: draw from the chosen deck and
+   * commit the `cardDraw` through the same channel as a roll (so the drawn card
+   * shows in the same confirmation popup and a doubles chain still grants an
+   * extra roll). Mirrors {@link decide}.
+   */
+  const chooseCard = useCallback(
+    async (deck: CardDeck) => {
+      const snap = stateRef.current
+      if (snap.phase !== 'deciding' || !snap.pendingChoice) return
+      if (controlsPlayer !== 'all' && controlsPlayer !== snap.pendingChoice.seat) return
+      if (!sequencer.acquireTurnLock()) return
+      try {
+        const resolution = resolveCardDraw(snap, deck)
+        hooksRef.current?.onLocalTurn?.(resolution, sequencer.claimSeq())
+        await executeTurn(resolution, sequencer.beginRun())
+      } finally {
+        sequencer.releaseTurnLock()
+      }
+    },
+    [controlsPlayer, executeTurn, sequencer],
+  )
 
   /**
    * Commit a property-management / trade resolution through the same channel as a
@@ -711,6 +739,11 @@ export function useBankElHazz({ controlsPlayer = 'all', hooks }: UseBankOptions 
     state.phase === 'deciding' &&
     state.pendingBuy != null &&
     (controlsPlayer === 'all' || controlsPlayer === state.pendingBuy.seat)
+  // A "Luck or Court" deck choice is open for this client to resolve.
+  const canChooseCard =
+    state.phase === 'deciding' &&
+    state.pendingChoice != null &&
+    (controlsPlayer === 'all' || controlsPlayer === state.pendingChoice.seat)
   // P2 jail: the current player is locked up and choosing how to get out.
   const inJail = (currentPlayer?.jailTurns ?? 0) > 0
   const canManageJail = state.phase === 'idle' && isMyTurn && inJail
@@ -757,6 +790,9 @@ export function useBankElHazz({ controlsPlayer = 'all', hooks }: UseBankOptions 
     roll,
     decideBuy,
     decideDecline,
+    // "Luck or Court" deck choice (set while `pendingChoice` is open).
+    canChooseCard,
+    chooseCard,
     /** Dismiss the Luck/Court card popup (resumes the paused turn). */
     acknowledgeCard,
     // P3/P4 property management.

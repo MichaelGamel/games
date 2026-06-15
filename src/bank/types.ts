@@ -13,6 +13,7 @@ export type { DieValue }
  * - `property` — buyable; charges rent to visitors once owned.
  * - `luck`     — draw a حظك (Luck) card (can chain into another tile).
  * - `court`    — draw a محاكمة (Court) card (can chain into another tile).
+ * - `choice`   — a "Luck or Court" cell: the player picks which deck to draw.
  * - `tax`       — pay a fixed fee to the bank.
  * - `reward`    — collect a fixed gift from the bank (unused by the current board).
  * - `jail`      — corner 30 (السجن); "just visiting" unless sent here by a card.
@@ -24,6 +25,7 @@ export type TileKind =
   | 'property'
   | 'luck'
   | 'court'
+  | 'choice'
   | 'tax'
   | 'reward'
   | 'jail'
@@ -43,6 +45,7 @@ export type BankTileNameKey =
   | 'fastBus'
   | 'luck'
   | 'court'
+  | 'cardChoice'
   // the lone petrol utility
   | 'gasStation'
   // cities (in board order)
@@ -293,8 +296,33 @@ export type BankTurnResolution =
       extraTurn?: boolean
       /** P2 doubles: this seat's consecutive-doubles count incl. this roll (0 = none). */
       doublesCount?: number
+      /**
+       * Set when the roll ended on a "Luck or Court" cell: the turn pauses so the
+       * player can pick a deck. The reducer opens a `deciding` choice (like a buy)
+       * and the pick commits as a separate `cardDraw` event. Optional/back-compat.
+       */
+      cardChoice?: { tile: number } | null
     }
   | { type: 'decision'; seat: number; tile: number; action: 'buy' | 'decline'; price: number }
+  /**
+   * The player's chosen-deck draw on a "Luck or Court" cell — the second half of
+   * a turn that paused for {@link cardChoice}. Resolves the drawn card and any
+   * chain exactly like a roll's tail (so it carries `effects`, a possible
+   * `buyOption`, win detection, and the carried doubles/extra-turn), but moves no
+   * dice. Committed through the same channel; the reducer clears `pendingChoice`.
+   */
+  | {
+      type: 'cardDraw'
+      seat: number
+      deck: CardDeck
+      effects: TurnEffect[]
+      finalTile: number
+      buyOption: { tile: number; price: number } | null
+      isWin: boolean
+      winnerId: number | null
+      extraTurn?: boolean
+      doublesCount?: number
+    }
   | { type: 'jailSkip'; seat: number }
   /**
    * A property-management action taken during the player's own idle turn (P3/P4):
@@ -329,6 +357,12 @@ export interface BankGameState {
   lastDice: DieValue[]
   /** An open buy/skip choice (set while `phase === 'deciding'`). */
   pendingBuy: { seat: number; tile: number; price: number } | null
+  /**
+   * An open "Luck or Court" deck choice (set while `phase === 'deciding'`, after
+   * a roll lands on a `choice` cell). Mutually exclusive with `pendingBuy`; the
+   * pick commits as a `cardDraw` event.
+   */
+  pendingChoice: { seat: number; tile: number } | null
   /** Seats in elimination order → final standings (last out = best of the losers). */
   bankruptedOrder: number[]
   winnerId: number | null

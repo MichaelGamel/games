@@ -33,6 +33,7 @@ export function pickBankState(s: BankGameState): BankGameState {
     rules: s.rules,
     lastDice: s.lastDice,
     pendingBuy: s.pendingBuy,
+    pendingChoice: s.pendingChoice,
     bankruptedOrder: s.bankruptedOrder,
     winnerId: s.winnerId,
     winReason: s.winReason,

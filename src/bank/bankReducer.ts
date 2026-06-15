@@ -70,6 +70,7 @@ export const initialBankState: BankGameState = {
   rules: { ...DEFAULT_BANK_RULES },
   lastDice: [],
   pendingBuy: null,
+  pendingChoice: null,
   bankruptedOrder: [],
   winnerId: null,
   winReason: null,
@@ -336,6 +337,48 @@ export function bankReducer(state: BankGameState, action: BankAction): BankGameS
         return { ...state, players, ownership, turnCount }
       }
 
+      if (r.type === 'cardDraw') {
+        // The chosen-deck draw on a "Luck or Court" cell: apply its effects and
+        // close the turn like a roll's tail (win / buy pause / hand-off), but
+        // carry no fresh dice. Always clears the pending deck choice.
+        const players = state.players.map((p) => ({ ...p }))
+        const ownership = { ...state.ownership }
+        const bankruptedOrder = [...state.bankruptedOrder]
+        for (const effect of r.effects) applyEffect(players, ownership, bankruptedOrder, r.seat, effect)
+
+        const extraTurn = r.extraTurn ?? false
+        const doublesCount = r.doublesCount ?? 0
+        const consecutiveDoubles = doublesCount > 0 && extraTurn ? doublesCount : 0
+
+        if (r.isWin) {
+          return {
+            ...state, players, ownership, bankruptedOrder,
+            phase: 'won', winnerId: r.winnerId, winReason: 'lastStanding',
+            pendingChoice: null, consecutiveDoubles: 0, turnCount,
+          }
+        }
+        if (r.buyOption && players[r.seat].status === 'active') {
+          return {
+            ...state, players, ownership, bankruptedOrder,
+            phase: 'deciding',
+            pendingChoice: null,
+            pendingBuy: { seat: r.seat, tile: r.buyOption.tile, price: r.buyOption.price },
+            consecutiveDoubles, turnCount,
+          }
+        }
+        const adv = advanceTurn(state, players, ownership, r.seat, extraTurn)
+        return {
+          ...state, players, ownership, bankruptedOrder,
+          pendingChoice: null,
+          currentPlayerIndex: adv.currentPlayerIndex,
+          round: adv.round,
+          phase: adv.phase,
+          winnerId: adv.winnerId,
+          winReason: adv.winReason,
+          consecutiveDoubles, turnCount,
+        }
+      }
+
       // r.type === 'roll'
       const players = state.players.map((p) => ({ ...p }))
       const ownership = { ...state.ownership }
@@ -361,6 +404,23 @@ export function bankReducer(state: BankGameState, action: BankAction): BankGameS
           winnerId: r.winnerId,
           winReason: 'lastStanding',
           consecutiveDoubles: 0,
+          turnCount,
+        }
+      }
+
+      if (r.cardChoice && players[r.seat].status === 'active') {
+        // Landed on a "Luck or Court" cell: keep the seat and open the deck
+        // choice. The doubles chain rides along (via consecutiveDoubles) so the
+        // post-choice `cardDraw` can still grant the extra roll.
+        return {
+          ...state,
+          players,
+          ownership,
+          bankruptedOrder,
+          phase: 'deciding',
+          pendingBuy: null,
+          pendingChoice: { seat: r.seat, tile: r.cardChoice.tile },
+          consecutiveDoubles,
           turnCount,
         }
       }
@@ -440,6 +500,7 @@ export function bankReducer(state: BankGameState, action: BankAction): BankGameS
         rules: action.rules,
         lastDice: [],
         pendingBuy: null,
+        pendingChoice: null,
         bankruptedOrder: action.bankruptedOrder,
         winnerId: action.winnerId,
         winReason: action.ended ? 'lastStanding' : null,

@@ -28,6 +28,7 @@ const KIND_EMOJI: Partial<Record<BankTileT['kind'], string>> = {
   fastbus: '🚌',
   luck: '🎲',
   court: '⚖️',
+  choice: '🎲⚖️',
   tax: '💸',
   reward: '🎁',
 }
@@ -60,7 +61,7 @@ export const BankTileCell = memo(function BankTileCell({
   const className = cn(
     'relative flex h-full w-full flex-col overflow-hidden border border-amber-950/30 bg-[#fbf3de] text-amber-950',
     isCorner && 'bg-[#f6e2b3]',
-    (tile.kind === 'luck' || tile.kind === 'court') && 'bg-[#f8ecc8]',
+    (tile.kind === 'luck' || tile.kind === 'court' || tile.kind === 'choice') && 'bg-[#f8ecc8]',
     isProperty &&
       'cursor-pointer transition hover:brightness-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-sky-600',
   )

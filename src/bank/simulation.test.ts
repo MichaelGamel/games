@@ -9,7 +9,7 @@
 import { describe, expect, it } from 'vitest'
 import { bankReducer, initialBankState, type PlayerSetup } from './bankReducer'
 import { BOARD_TILES } from './config'
-import { resolveBuyDecision, resolveDecline, resolveTurn, rollDice } from './rules'
+import { resolveBuyDecision, resolveCardDraw, resolveDecline, resolveTurn, rollDice } from './rules'
 import { chooseBuyDecision, type BotLevel } from './bot'
 import type { BankGameState, BankRules } from './types'
 
@@ -62,6 +62,9 @@ function playMatch(
         type: 'COMMIT_TURN',
         resolution: decision === 'buy' ? resolveBuyDecision(state) : resolveDecline(state),
       })
+    } else if (state.phase === 'deciding' && state.pendingChoice) {
+      // A "Luck or Court" cell: pick a deck (Luck) and resolve the draw.
+      state = bankReducer(state, { type: 'COMMIT_TURN', resolution: resolveCardDraw(state, 'luck', rng) })
     } else {
       return { state, finished: false, error: `unexpected phase: ${state.phase}` }
     }

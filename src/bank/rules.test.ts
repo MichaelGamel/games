@@ -17,6 +17,7 @@ import {
   netWorth,
   rentFor,
   resolveBuyDecision,
+  resolveCardDraw,
   resolveDecline,
   resolveTurn,
   sellRefund,
@@ -30,11 +31,11 @@ import type { BankGameState, BankPlayer, CardDeck, DieValue, Ownership, TurnEffe
 // --- fixtures --------------------------------------------------------------
 //
 // The 34-tile board (corners 0 Start / 7 Lucky Club / 17 Fast Bus / 24 Jail):
-//   • Card cells — luck: 3, 12, 29 · court: 10, 20, 31
+//   • Luck cells: 12, 29 · Court cells: 10, 20, 31 · "Luck or Court" choice: 3
 //   • Color group A = tiles 4, 5, 6 (Beirut / Riyadh / Baghdad)
 //   • The lone utility (group U) = tile 15 (petrol)
 // A handy way to land on a card tile: start one tile before it and roll a 2,
-// e.g. from 1 → 3 (luck) or from 8 → 10 (court).
+// e.g. from 10 → 12 (luck), from 8 → 10 (court), or from 1 → 3 (choice).
 
 function player(id: number, position: number, cash: number, extra: Partial<BankPlayer> = {}): BankPlayer {
   return {
@@ -61,6 +62,7 @@ function makeState(players: BankPlayer[], overrides: Partial<BankGameState> = {}
     rules: { ...DEFAULT_BANK_RULES },
     lastDice: [],
     pendingBuy: null,
+    pendingChoice: null,
     bankruptedOrder: [],
     winnerId: null,
     winReason: null,
@@ -130,16 +132,16 @@ describe('resolveTurn — movement, pass-start and buy options', () => {
 
 describe('resolveTurn — cards', () => {
   it('chains a luck move card into the next tile in order [card, move]', () => {
-    const state = makeState([player(0, 1, 1500)])
-    const r = roll(state, d(1, 1), draws('luck', 'advance3')) // → 3 (luck) → +3 → 6 (property)
+    const state = makeState([player(0, 10, 1500)])
+    const r = roll(state, d(1, 1), draws('luck', 'advance3')) // → 12 (luck) → +3 → 15 (property)
     expect(kinds(r.effects)).toEqual(['move', 'card', 'move'])
     expect(only(r.effects, 'card')[0]).toMatchObject({ deck: 'luck', cardId: 'advance3' })
-    expect(r.finalTile).toBe(6)
-    expect(r.buyOption).toEqual({ tile: 6, price: priceOf(6) })
+    expect(r.finalTile).toBe(15)
+    expect(r.buyOption).toEqual({ tile: 15, price: priceOf(15) })
   })
 
   it('a luck cash card pays out in order [card, cash]', () => {
-    const r = roll(makeState([player(0, 1, 1500)]), d(1, 1), draws('luck', 'dividend')) // → 3 (luck)
+    const r = roll(makeState([player(0, 10, 1500)]), d(1, 1), draws('luck', 'dividend')) // → 12 (luck)
     expect(kinds(r.effects)).toEqual(['move', 'card', 'cash'])
     expect(only(r.effects, 'cash')[0]).toMatchObject({ delta: 150, reason: 'luck' })
   })
@@ -151,7 +153,7 @@ describe('resolveTurn — cards', () => {
   })
 
   it('bakes the card calculation (before / delta / after) into the card effect', () => {
-    const r = roll(makeState([player(0, 1, 1500)]), d(1, 1), draws('luck', 'dividend')) // → 3 (luck) +150
+    const r = roll(makeState([player(0, 10, 1500)]), d(1, 1), draws('luck', 'dividend')) // → 12 (luck) +150
     expect(only(r.effects, 'card')[0]).toMatchObject({
       balanceBefore: 1500,
       delta: 150,
@@ -166,12 +168,12 @@ describe('resolveTurn — cards', () => {
     })
 
     // A go-to-jail card has no direct cash impact → delta 0.
-    const jailCard = roll(makeState([player(0, 1, 1500)]), d(1, 1), draws('luck', 'goToJail'))
+    const jailCard = roll(makeState([player(0, 10, 1500)]), d(1, 1), draws('luck', 'goToJail'))
     expect(only(jailCard.effects, 'card')[0]).toMatchObject({ delta: 0 })
   })
 
   it('go-to-jail (card) sends to jail (tile 24) with no pass-start and no buy option', () => {
-    const r = roll(makeState([player(0, 1, 1500)]), d(1, 1), draws('luck', 'goToJail')) // → 3 (luck) → jail
+    const r = roll(makeState([player(0, 10, 1500)]), d(1, 1), draws('luck', 'goToJail')) // → 12 (luck) → jail
     expect(only(r.effects, 'jail')[0]).toMatchObject({ seat: 0 })
     expect(only(r.effects, 'passStart')).toHaveLength(0)
     expect(r.finalTile).toBe(JAIL_TILE)
@@ -204,12 +206,12 @@ describe('resolveTurn — cards', () => {
 
   it('collect-each only takes from other solvent, active players', () => {
     const state = makeState([
-      player(0, 1, 1500),
+      player(0, 10, 1500),
       player(1, 20, 100),
       player(2, 25, 30),
       player(3, 31, 500, { status: 'bankrupt' }),
     ])
-    const r = roll(state, d(1, 1), draws('luck', 'birthday')) // → 3 (luck) → collect 50 from each
+    const r = roll(state, d(1, 1), draws('luck', 'birthday')) // → 12 (luck) → collect 50 from each
     const collect = only(r.effects, 'collect')
     expect(collect).toHaveLength(1)
     expect(collect[0].froms).toEqual([1]) // 2 can't afford, 3 is bankrupt
@@ -217,20 +219,62 @@ describe('resolveTurn — cards', () => {
   })
 
   it('pay-each pays every other active player', () => {
-    const state = makeState([player(0, 1, 1500), player(1, 20, 100), player(2, 25, 100)])
-    const r = roll(state, d(1, 1), draws('luck', 'charity')) // → 3 (luck) → pay 40 to each
+    const state = makeState([player(0, 10, 1500), player(1, 20, 100), player(2, 25, 100)])
+    const r = roll(state, d(1, 1), draws('luck', 'charity')) // → 12 (luck) → pay 40 to each
     const pay = only(r.effects, 'pay')
     expect(pay).toHaveLength(2)
     expect(pay.every((p) => p.amount === 40 && p.reason === 'luck-pay-each')).toBe(true)
   })
 
   it('maintenance charges per owned property (−40 × owned), or nothing when none owned', () => {
-    const withProps = makeState([player(0, 1, 1500)], { ownership: { 5: own(0), 9: own(0) } })
-    const r = roll(withProps, d(1, 1), draws('luck', 'repairs')) // → 3 (luck) → 40 × 2
+    const withProps = makeState([player(0, 10, 1500)], { ownership: { 5: own(0), 9: own(0) } })
+    const r = roll(withProps, d(1, 1), draws('luck', 'repairs')) // → 12 (luck) → 40 × 2
     expect(only(r.effects, 'cash')[0]).toMatchObject({ delta: -80, reason: 'maintenance' })
 
-    const noProps = roll(makeState([player(0, 1, 1500)]), d(1, 1), draws('luck', 'repairs'))
+    const noProps = roll(makeState([player(0, 10, 1500)]), d(1, 1), draws('luck', 'repairs'))
     expect(only(noProps.effects, 'cash')).toHaveLength(0)
+  })
+})
+
+// --- "Luck or Court" choice cell (tile 3) ----------------------------------
+
+describe('resolveTurn / resolveCardDraw — the "Luck or Court" choice cell', () => {
+  it('pauses on the choice cell without drawing a card', () => {
+    const r = roll(makeState([player(0, 1, 1500)]), d(1, 1)) // 1 → 3 (choice)
+    expect(r.finalTile).toBe(3)
+    expect(r.cardChoice).toEqual({ tile: 3 })
+    expect(only(r.effects, 'card')).toHaveLength(0)
+    expect(r.buyOption).toBeNull()
+  })
+
+  it('resolveCardDraw draws from the chosen deck and stamps the calculation', () => {
+    const state = makeState([player(0, 3, 1500), player(1, 0, 1500)])
+    const luck = resolveCardDraw(state, 'luck', draws('luck', 'dividend'))
+    if (luck.type !== 'cardDraw') throw new Error('expected a cardDraw resolution')
+    expect(luck.deck).toBe('luck')
+    expect(only(luck.effects, 'card')[0]).toMatchObject({ deck: 'luck', cardId: 'dividend', delta: 150 })
+
+    const court = resolveCardDraw(state, 'court', draws('court', 'courtFine'))
+    if (court.type !== 'cardDraw') throw new Error('expected a cardDraw resolution')
+    expect(court.deck).toBe('court')
+    expect(only(court.effects, 'card')[0]).toMatchObject({ deck: 'court', cardId: 'courtFine', delta: -150 })
+  })
+
+  it('a move card drawn from the choice cell chains into the next tile', () => {
+    const state = makeState([player(0, 3, 1500)])
+    const r = resolveCardDraw(state, 'luck', draws('luck', 'advance3')) // 3 → +3 → 6 (property)
+    if (r.type !== 'cardDraw') throw new Error('expected a cardDraw resolution')
+    expect(kinds(r.effects)).toEqual(['card', 'move'])
+    expect(r.finalTile).toBe(6)
+    expect(r.buyOption).toEqual({ tile: 6, price: priceOf(6) })
+  })
+
+  it('carries the paused roll’s doubles chain into the extra turn', () => {
+    const state = makeState([player(0, 3, 1500)], { consecutiveDoubles: 1 })
+    const r = resolveCardDraw(state, 'luck', draws('luck', 'dividend'))
+    if (r.type !== 'cardDraw') throw new Error('expected a cardDraw resolution')
+    expect(r.extraTurn).toBe(true)
+    expect(r.doublesCount).toBe(1)
   })
 })
 
@@ -428,7 +472,7 @@ describe('resolveTurn — richer jail (P2)', () => {
   })
 
   it('a Get-Out-of-Jail card is banked on the seat', () => {
-    const r = roll(makeState([player(0, 1, 1500), player(1, 0, 1500)]), d(1, 1), draws('luck', 'getOutOfJail'))
+    const r = roll(makeState([player(0, 10, 1500), player(1, 0, 1500)]), d(1, 1), draws('luck', 'getOutOfJail'))
     expect(only(r.effects, 'grantJailCard')[0]).toMatchObject({ seat: 0 })
   })
 })

@@ -70,7 +70,7 @@ describe('bank board geometry', () => {
     expect(tileRole(24)).toBe('jail')
   })
 
-  it('has the expected tile-kind totals (4 corners, 3 luck, 3 court, 24 property, no tax)', () => {
+  it('has the expected tile-kind totals (4 corners, 2 luck, 3 court, 1 choice, 24 property, no tax)', () => {
     const counts = BOARD.reduce<Record<string, number>>((acc, tile) => {
       acc[tile.kind] = (acc[tile.kind] ?? 0) + 1
       return acc
@@ -80,8 +80,9 @@ describe('bank board geometry', () => {
       jail: 1,
       luckyClub: 1,
       fastbus: 1,
-      luck: 3,
+      luck: 2,
       court: 3,
+      choice: 1,
       property: 24,
     })
   })

@@ -22,7 +22,7 @@ export { chooseBuyDecision }
 
 export function useBankBotAutoPlay(game: BankController): void {
   const reduced = useReducedMotion()
-  const { phase, currentPlayerIndex, turnCount, pendingBuy } = game
+  const { phase, currentPlayerIndex, turnCount, pendingBuy, pendingChoice } = game
   const currentIsBot = game.currentPlayer?.isBot ?? false
 
   // Keep the freshest controller without re-arming the timers every render
@@ -56,4 +56,15 @@ export function useBankBotAutoPlay(game: BankController): void {
     }, reduced ? 150 : TIMING.botThinkMs)
     return () => clearTimeout(timer)
   }, [phase, pendingBuy, reduced])
+
+  // Pick a deck when a bot lands on a "Luck or Court" cell. Deterministic (always
+  // Luck) so the choice replays identically; the two decks are equivalent flavor.
+  useEffect(() => {
+    if (phase !== 'deciding' || !pendingChoice) return
+    if (!gameRef.current.players[pendingChoice.seat]?.isBot) return
+    const timer = setTimeout(() => {
+      if (gameRef.current.pendingChoice) void gameRef.current.chooseCard('luck')
+    }, reduced ? 150 : TIMING.botThinkMs)
+    return () => clearTimeout(timer)
+  }, [phase, pendingChoice, reduced])
 }

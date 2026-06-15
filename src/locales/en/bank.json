@@ -126,6 +126,8 @@
     "confirm": "Got it",
     "before": "You have",
     "after": "Total",
+    "chooseTitle": "Draw a card",
+    "choosePrompt": "Pick a pile — Luck or Court?",
     "luck": {
       "advance3": "Lucky winds! Advance 3 spaces.",
       "back3": "Sandstorm! Go back 3 spaces.",
@@ -200,6 +202,7 @@
     "fastBus": "The Fast Bus",
     "luck": "Luck",
     "court": "Court",
+    "cardChoice": "Luck or Court",
     "gasStation": "Petrol Station",
     "alquds": "Jerusalem",
     "gaza": "Gaza",

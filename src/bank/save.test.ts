@@ -54,6 +54,7 @@ describe('bank save/load', () => {
         'lastDice',
         'ownership',
         'pendingBuy',
+        'pendingChoice',
         'phase',
         'players',
         'round',

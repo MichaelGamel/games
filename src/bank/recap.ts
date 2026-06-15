@@ -102,10 +102,11 @@ export function summarizeBank(log: MatchLog<BankTurnResolution, BankRules>): Ban
       continue
     }
 
-    // r.type === 'roll'
+    // r.type === 'roll' | 'cardDraw' — both carry an ordered effect list; only a
+    // real dice roll counts toward the roll tally (a card draw is a sub-event).
     totalTurns++
     const stats = players[r.seat]
-    if (stats) stats.rolls++
+    if (stats && r.type === 'roll') stats.rolls++
 
     for (const effect of r.effects) {
       switch (effect.kind) {

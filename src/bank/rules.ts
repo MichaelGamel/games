@@ -125,151 +125,330 @@ export interface BankTurnContext {
  *    properties are released); if that leaves exactly one active player, the win
  *    is recorded in the resolution.
  */
+/**
+ * Mutable working state for a turn's tail — the chain → buy → win logic shared
+ * by {@link resolveTurn} (after the dice move) and {@link resolveCardDraw} (after
+ * a "Luck or Court" deck pick). The helpers below mutate it in place.
+ */
+interface TurnWork {
+  state: BankGameState
+  seat: number
+  passReward: number
+  rng: Rng
+  /** Working cash/jail-card copies, so chained transactions see running totals. */
+  cash: number[]
+  jailCards: number[]
+  effects: TurnEffect[]
+  currentTile: number
+  bankrupted: boolean
+  /** Sent to jail this turn (card / third double): suppresses buy + extra turn. */
+  wentToJail: boolean
+  /** Landed/chained onto a `choice` cell and paused for a deck pick (else null). */
+  choiceTile: number | null
+  cardsUsed: number
+}
+
+const activeIn = (state: BankGameState, id: number): boolean => state.players[id]?.status === 'active'
+
+function workBankrupt(w: TurnWork): void {
+  const releasedTiles = Object.keys(w.state.ownership)
+    .map(Number)
+    .filter((id) => w.state.ownership[id].owner === w.seat)
+    .sort((a, b) => a - b)
+  w.effects.push({ kind: 'bankrupt', seat: w.seat, releasedTiles })
+  w.bankrupted = true
+}
+
+function workMoveForward(w: TurnWork, from: number, steps: number): number {
+  const to = landingTile(from, steps)
+  const passed = passesStart(from, steps)
+  w.effects.push({ kind: 'move', from, to, path: forwardSteps(from, steps), passedStart: passed })
+  if (passed) {
+    w.effects.push({ kind: 'passStart', amount: w.passReward })
+    w.cash[w.seat] += w.passReward
+  }
+  return to
+}
+
+function workMoveBackward(w: TurnWork, from: number, steps: number): number {
+  // Backward moves never pay the start reward, even crossing 0 in reverse.
+  const path: number[] = []
+  let t = from
+  for (let i = 0; i < steps; i++) {
+    t = (t - 1 + BOARD.length) % BOARD.length
+    path.push(t)
+  }
+  w.effects.push({ kind: 'move', from, to: t, path, passedStart: false })
+  return t
+}
+
+function workMoveToStart(w: TurnWork, from: number): number {
+  const steps = (BOARD.length - (from % BOARD.length)) % BOARD.length
+  w.effects.push({
+    kind: 'move',
+    from,
+    to: 0,
+    path: steps > 0 ? forwardSteps(from, steps) : [],
+    passedStart: true,
+  })
+  w.effects.push({ kind: 'passStart', amount: w.passReward })
+  w.cash[w.seat] += w.passReward
+  return 0
+}
+
+function workGoToJail(w: TurnWork): number {
+  w.effects.push({ kind: 'jail', seat: w.seat })
+  w.wentToJail = true
+  return JAIL_TILE // the Jail corner (سجن الحظ)
+}
+
+/** Apply a drawn card's effect to `w`. Returns true to keep resolving the new tile. */
+function workApplyCard(w: TurnWork, card: Card): boolean {
+  const e = card.effect
+  const seat = w.seat
+  switch (e.kind) {
+    case 'cash': {
+      if (e.amount < 0 && !canAfford(seat, -e.amount, w.cash)) {
+        workBankrupt(w)
+        return false
+      }
+      w.effects.push({ kind: 'cash', seat, delta: e.amount, reason: 'luck' })
+      w.cash[seat] += e.amount
+      return false
+    }
+    case 'move':
+      w.currentTile =
+        e.steps >= 0 ? workMoveForward(w, w.currentTile, e.steps) : workMoveBackward(w, w.currentTile, -e.steps)
+      return true
+    case 'moveToStart':
+      w.currentTile = workMoveToStart(w, w.currentTile)
+      return false
+    case 'jail':
+      w.currentTile = workGoToJail(w)
+      return false
+    case 'collectEach': {
+      const froms: number[] = []
+      for (const p of w.state.players) {
+        if (p.id === seat || !activeIn(w.state, p.id)) continue
+        if (canAfford(p.id, e.amount, w.cash)) {
+          froms.push(p.id)
+          w.cash[p.id] -= e.amount
+          w.cash[seat] += e.amount
+        }
+      }
+      if (froms.length)
+        w.effects.push({ kind: 'collect', to: seat, froms, amount: e.amount, reason: 'luck-collect-each' })
+      return false
+    }
+    case 'payEach': {
+      const others = w.state.players.filter((p) => p.id !== seat && activeIn(w.state, p.id))
+      const total = e.amount * others.length
+      if (!canAfford(seat, total, w.cash)) {
+        workBankrupt(w)
+        return false
+      }
+      for (const p of others) {
+        w.effects.push({ kind: 'pay', from: seat, to: p.id, amount: e.amount, reason: 'luck-pay-each' })
+        w.cash[seat] -= e.amount
+        w.cash[p.id] += e.amount
+      }
+      return false
+    }
+    case 'maintenance': {
+      const owned = Object.values(w.state.ownership).filter((o) => o.owner === seat).length
+      const total = e.perProperty * owned
+      if (total === 0) return false
+      if (!canAfford(seat, total, w.cash)) {
+        workBankrupt(w)
+        return false
+      }
+      w.effects.push({ kind: 'cash', seat, delta: -total, reason: 'maintenance' })
+      w.cash[seat] -= total
+      return false
+    }
+    case 'getOutFree':
+      // Banked as a kept card; spent later to leave jail for free.
+      w.effects.push({ kind: 'grantJailCard', seat })
+      w.jailCards[seat] += 1
+      return false
+  }
+}
+
+/**
+ * Draw one card from `deck`, emit the calculation-stamped marker, and apply it.
+ * The marker carries the drawer's running balance around the card (so the popup
+ * can show before/±/after), back-filled once the direct debit/credit has run.
+ */
+function workDrawCard(w: TurnWork, deck: CardDeck): boolean {
+  const card = drawCard(deck, w.rng)
+  const before = w.cash[w.seat]
+  const cardEffect: Extract<TurnEffect, { kind: 'card' }> = {
+    kind: 'card',
+    deck,
+    cardId: card.id,
+    balanceBefore: before,
+    delta: 0,
+    balanceAfter: before,
+  }
+  w.effects.push(cardEffect)
+  const keep = workApplyCard(w, card)
+  cardEffect.delta = w.cash[w.seat] - before
+  cardEffect.balanceAfter = w.cash[w.seat]
+  return keep
+}
+
+/**
+ * Resolve the landed tile and chain through cards up to {@link MAX_CARD_CHAIN}.
+ * A `choice` cell pauses the turn (records `choiceTile`) so the player can pick a
+ * deck — unless `forcedDeck` pre-decides the *first* one (the resume after a
+ * pick). Mutates `w`.
+ */
+function resolveChain(w: TurnWork, startResolving: boolean, forcedDeck?: CardDeck): void {
+  let resolving = startResolving
+  let forcedUsed = false
+  while (resolving && !w.bankrupted) {
+    const tile = BOARD[w.currentTile]
+    switch (tile.kind) {
+      case 'property': {
+        const entry = w.state.ownership[w.currentTile]
+        if (entry && entry.owner !== w.seat && !entry.mortgaged && activeIn(w.state, entry.owner)) {
+          let rent = rentFor(tile, entry)
+          // Owning the full color group (no upgrades yet) doubles the rent (P2).
+          if (
+            rent > 0 &&
+            entry.level === 0 &&
+            tile.group &&
+            ownsFullGroup(entry.owner, tile.group, w.state.ownership)
+          ) {
+            rent *= 2
+          }
+          if (rent > 0) {
+            if (!canAfford(w.seat, rent, w.cash)) {
+              workBankrupt(w)
+            } else {
+              w.effects.push({ kind: 'pay', from: w.seat, to: entry.owner, amount: rent, reason: 'rent' })
+              w.cash[w.seat] -= rent
+              w.cash[entry.owner] += rent
+            }
+          }
+        }
+        resolving = false
+        break
+      }
+      case 'tax': {
+        const amt = tile.amount ?? 0
+        if (!canAfford(w.seat, amt, w.cash)) workBankrupt(w)
+        else {
+          w.effects.push({ kind: 'cash', seat: w.seat, delta: -amt, reason: 'tax' })
+          w.cash[w.seat] -= amt
+        }
+        resolving = false
+        break
+      }
+      case 'reward': {
+        const amt = tile.amount ?? 0
+        w.effects.push({ kind: 'cash', seat: w.seat, delta: amt, reason: 'reward' })
+        w.cash[w.seat] += amt
+        resolving = false
+        break
+      }
+      case 'luck':
+      case 'court': {
+        if (w.cardsUsed >= MAX_CARD_CHAIN) {
+          resolving = false
+          break
+        }
+        w.cardsUsed++
+        resolving = workDrawCard(w, tile.kind)
+        break
+      }
+      case 'choice': {
+        if (forcedDeck && !forcedUsed) {
+          // The resume after a deck pick: draw the first card from the chosen deck.
+          forcedUsed = true
+          if (w.cardsUsed >= MAX_CARD_CHAIN) {
+            resolving = false
+            break
+          }
+          w.cardsUsed++
+          resolving = workDrawCard(w, forcedDeck)
+        } else {
+          // Pause for the player's Luck-or-Court pick (resolved as a `cardDraw`).
+          w.choiceTile = w.currentTile
+          resolving = false
+        }
+        break
+      }
+      case 'luckyClub': {
+        // The Lucky Club charges a flat entry fee.
+        const fee = tile.amount ?? 0
+        if (!canAfford(w.seat, fee, w.cash)) workBankrupt(w)
+        else {
+          w.effects.push({ kind: 'cash', seat: w.seat, delta: -fee, reason: 'club' })
+          w.cash[w.seat] -= fee
+        }
+        resolving = false
+        break
+      }
+      case 'fastbus':
+        // Catch the Fast Bus — the seat's next roll will be doubled.
+        w.effects.push({ kind: 'fastBus', seat: w.seat })
+        resolving = false
+        break
+      default:
+        // start / jail (just visiting) — no action.
+        resolving = false
+    }
+  }
+}
+
+/** Buy option from the final tile (unowned + affordable; never while paused/out). */
+function computeBuyOption(w: TurnWork): { tile: number; price: number } | null {
+  if (w.bankrupted || w.wentToJail || w.choiceTile != null) return null
+  const tile = BOARD[w.currentTile]
+  if (tile.kind === 'property' && w.state.ownership[w.currentTile] == null) {
+    const price = tile.price ?? Infinity
+    if (canAfford(w.seat, price, w.cash)) return { tile: w.currentTile, price }
+  }
+  return null
+}
+
+/** A bankruptcy that leaves exactly one active player ends the match. */
+function computeWin(w: TurnWork): { isWin: boolean; winnerId: number | null } {
+  if (!w.bankrupted) return { isWin: false, winnerId: null }
+  const remaining = w.state.players.filter((p) => p.status === 'active' && p.id !== w.seat).map((p) => p.id)
+  return remaining.length === 1 ? { isWin: true, winnerId: remaining[0] } : { isWin: false, winnerId: null }
+}
+
+/** Fresh working state for `seat`, standing on its current tile. */
+function newWork(state: BankGameState, rng: Rng): TurnWork {
+  const seat = state.currentPlayerIndex
+  return {
+    state,
+    seat,
+    passReward: state.rules.passStartReward,
+    rng,
+    cash: state.players.map((p) => p.cash),
+    jailCards: state.players.map((p) => p.jailCards),
+    effects: [],
+    currentTile: state.players[seat].position,
+    bankrupted: false,
+    wentToJail: false,
+    choiceTile: null,
+    cardsUsed: 0,
+  }
+}
+
 export function resolveTurn(ctx: BankTurnContext): BankTurnResolution {
   const { state, dice } = ctx
   const rng = ctx.rng ?? Math.random
   const seat = state.currentPlayerIndex
-  const ownership = state.ownership
   const player = state.players[seat]
+  const w = newWork(state, rng)
 
-  const effects: TurnEffect[] = []
-  // Working copies, so chained payments / the jail fine see running totals.
-  const cash = state.players.map((p) => p.cash)
-  const jailCards = state.players.map((p) => p.jailCards)
-  let currentTile = player.position
-  let bankrupted = false
-  // True once the seat is sent to jail this turn (card / third double): it
-  // suppresses both the extra turn and any buy option from the landed tile.
-  let wentToJail = false
-
-  const passReward = state.rules.passStartReward
   const wasInJail = player.jailTurns > 0
   const isDoubles = dice[0] === dice[1]
   const doublesEnabled = state.rules.doubles === true
-
-  const isActive = (id: number) => state.players[id]?.status === 'active'
-
-  function bankrupt(): void {
-    const releasedTiles = Object.keys(ownership)
-      .map(Number)
-      .filter((id) => ownership[id].owner === seat)
-      .sort((a, b) => a - b)
-    effects.push({ kind: 'bankrupt', seat, releasedTiles })
-    bankrupted = true
-  }
-
-  function moveForward(from: number, steps: number): number {
-    const to = landingTile(from, steps)
-    const passed = passesStart(from, steps)
-    effects.push({ kind: 'move', from, to, path: forwardSteps(from, steps), passedStart: passed })
-    if (passed) {
-      effects.push({ kind: 'passStart', amount: passReward })
-      cash[seat] += passReward
-    }
-    return to
-  }
-
-  function moveBackward(from: number, steps: number): number {
-    // Backward moves never pay the start reward, even crossing 0 in reverse.
-    const path: number[] = []
-    let t = from
-    for (let i = 0; i < steps; i++) {
-      t = (t - 1 + BOARD.length) % BOARD.length
-      path.push(t)
-    }
-    effects.push({ kind: 'move', from, to: t, path, passedStart: false })
-    return t
-  }
-
-  function moveToStart(from: number): number {
-    const steps = (BOARD.length - (from % BOARD.length)) % BOARD.length
-    effects.push({
-      kind: 'move',
-      from,
-      to: 0,
-      path: steps > 0 ? forwardSteps(from, steps) : [],
-      passedStart: true,
-    })
-    effects.push({ kind: 'passStart', amount: passReward })
-    cash[seat] += passReward
-    return 0
-  }
-
-  function goToJail(): number {
-    effects.push({ kind: 'jail', seat })
-    wentToJail = true
-    return JAIL_TILE // the Jail corner (سجن الحظ)
-  }
-
-  /** Apply a drawn card's effect. Returns true to keep resolving the new tile. */
-  function applyCard(card: Card): boolean {
-    const e = card.effect
-    switch (e.kind) {
-      case 'cash': {
-        if (e.amount < 0 && !canAfford(seat, -e.amount, cash)) {
-          bankrupt()
-          return false
-        }
-        effects.push({ kind: 'cash', seat, delta: e.amount, reason: 'luck' })
-        cash[seat] += e.amount
-        return false
-      }
-      case 'move':
-        currentTile = e.steps >= 0 ? moveForward(currentTile, e.steps) : moveBackward(currentTile, -e.steps)
-        return true
-      case 'moveToStart':
-        currentTile = moveToStart(currentTile)
-        return false
-      case 'jail':
-        currentTile = goToJail()
-        return false
-      case 'collectEach': {
-        const froms: number[] = []
-        for (const p of state.players) {
-          if (p.id === seat || !isActive(p.id)) continue
-          if (canAfford(p.id, e.amount, cash)) {
-            froms.push(p.id)
-            cash[p.id] -= e.amount
-            cash[seat] += e.amount
-          }
-        }
-        if (froms.length)
-          effects.push({ kind: 'collect', to: seat, froms, amount: e.amount, reason: 'luck-collect-each' })
-        return false
-      }
-      case 'payEach': {
-        const others = state.players.filter((p) => p.id !== seat && isActive(p.id))
-        const total = e.amount * others.length
-        if (!canAfford(seat, total, cash)) {
-          bankrupt()
-          return false
-        }
-        for (const p of others) {
-          effects.push({ kind: 'pay', from: seat, to: p.id, amount: e.amount, reason: 'luck-pay-each' })
-          cash[seat] -= e.amount
-          cash[p.id] += e.amount
-        }
-        return false
-      }
-      case 'maintenance': {
-        const owned = Object.values(ownership).filter((o) => o.owner === seat).length
-        const total = e.perProperty * owned
-        if (total === 0) return false
-        if (!canAfford(seat, total, cash)) {
-          bankrupt()
-          return false
-        }
-        effects.push({ kind: 'cash', seat, delta: -total, reason: 'maintenance' })
-        cash[seat] -= total
-        return false
-      }
-      case 'getOutFree':
-        // Banked as a kept card; spent later to leave jail for free.
-        effects.push({ kind: 'grantJailCard', seat })
-        jailCards[seat] += 1
-        return false
-    }
-  }
 
   // 0) A jailed player must first deal with jail (P2 richer jail). They either
   //    pay the fine, spend a kept card, or roll for doubles; a failed roll uses
@@ -278,33 +457,33 @@ export function resolveTurn(ctx: BankTurnContext): BankTurnResolution {
   if (wasInJail) {
     const intent = ctx.jailIntent ?? 'roll'
     const fine = state.rules.jailFine
-    if (intent === 'useCard' && jailCards[seat] > 0) {
-      effects.push({ kind: 'jailRelease', seat, via: 'card' })
-      jailCards[seat] -= 1
+    if (intent === 'useCard' && w.jailCards[seat] > 0) {
+      w.effects.push({ kind: 'jailRelease', seat, via: 'card' })
+      w.jailCards[seat] -= 1
     } else if (intent === 'payFine') {
-      if (!canAfford(seat, fine, cash)) {
-        bankrupt()
+      if (!canAfford(seat, fine, w.cash)) {
+        workBankrupt(w)
         skipMovement = true
       } else {
-        effects.push({ kind: 'cash', seat, delta: -fine, reason: 'jailFine' })
-        cash[seat] -= fine
-        effects.push({ kind: 'jailRelease', seat, via: 'fine' })
+        w.effects.push({ kind: 'cash', seat, delta: -fine, reason: 'jailFine' })
+        w.cash[seat] -= fine
+        w.effects.push({ kind: 'jailRelease', seat, via: 'fine' })
       }
     } else if (isDoubles) {
-      effects.push({ kind: 'jailRelease', seat, via: 'doubles' })
+      w.effects.push({ kind: 'jailRelease', seat, via: 'doubles' })
     } else if (player.jailTurns <= 1) {
       // Out of attempts: forced to pay (or go bankrupt), then move the roll.
-      if (!canAfford(seat, fine, cash)) {
-        bankrupt()
+      if (!canAfford(seat, fine, w.cash)) {
+        workBankrupt(w)
         skipMovement = true
       } else {
-        effects.push({ kind: 'cash', seat, delta: -fine, reason: 'jailFine' })
-        cash[seat] -= fine
-        effects.push({ kind: 'jailRelease', seat, via: 'forced' })
+        w.effects.push({ kind: 'cash', seat, delta: -fine, reason: 'jailFine' })
+        w.cash[seat] -= fine
+        w.effects.push({ kind: 'jailRelease', seat, via: 'forced' })
       }
     } else {
       // Still have attempts left: stay in jail, the turn ends here.
-      effects.push({ kind: 'jailStay', seat })
+      w.effects.push({ kind: 'jailStay', seat })
       skipMovement = true
     }
   }
@@ -318,149 +497,67 @@ export function resolveTurn(ctx: BankTurnContext): BankTurnResolution {
   if (!skipMovement) {
     if (!wasInJail && doublesEnabled && isDoubles) doublesCount = state.consecutiveDoubles + 1
     if (doublesCount >= 3) {
-      currentTile = goToJail()
+      w.currentTile = workGoToJail(w)
     } else {
       usedFastBus = player.fastBus === true
       const total = (dice[0] + dice[1]) * (usedFastBus ? 2 : 1)
-      currentTile = moveForward(currentTile, total)
+      w.currentTile = workMoveForward(w, w.currentTile, total)
       moved = true
     }
   }
 
-  // 2) Resolve the landed tile, chaining through cards up to the cap (only when
-  //    the seat actually moved — a jail stay / third double resolves nothing).
-  let cardsUsed = 0
-  let resolving = moved
-  while (resolving && !bankrupted) {
-    const tile = BOARD[currentTile]
-    switch (tile.kind) {
-      case 'property': {
-        const entry = ownership[currentTile]
-        if (entry && entry.owner !== seat && !entry.mortgaged && isActive(entry.owner)) {
-          let rent = rentFor(tile, entry)
-          // Owning the full color group (no upgrades yet) doubles the rent (P2).
-          if (
-            rent > 0 &&
-            entry.level === 0 &&
-            tile.group &&
-            ownsFullGroup(entry.owner, tile.group, ownership)
-          ) {
-            rent *= 2
-          }
-          if (rent > 0) {
-            if (!canAfford(seat, rent, cash)) {
-              bankrupt()
-            } else {
-              effects.push({ kind: 'pay', from: seat, to: entry.owner, amount: rent, reason: 'rent' })
-              cash[seat] -= rent
-              cash[entry.owner] += rent
-            }
-          }
-        }
-        resolving = false
-        break
-      }
-      case 'tax': {
-        const amt = tile.amount ?? 0
-        if (!canAfford(seat, amt, cash)) bankrupt()
-        else {
-          effects.push({ kind: 'cash', seat, delta: -amt, reason: 'tax' })
-          cash[seat] -= amt
-        }
-        resolving = false
-        break
-      }
-      case 'reward': {
-        const amt = tile.amount ?? 0
-        effects.push({ kind: 'cash', seat, delta: amt, reason: 'reward' })
-        cash[seat] += amt
-        resolving = false
-        break
-      }
-      case 'luck':
-      case 'court': {
-        if (cardsUsed >= MAX_CARD_CHAIN) {
-          resolving = false
-          break
-        }
-        cardsUsed++
-        const deck = tile.kind // 'luck' | 'court'
-        const card = drawCard(deck, rng)
-        // Capture the drawer's running balance around the card so the
-        // confirmation popup can show the calculation. The card marker is
-        // emitted first (keeping `[card, cash]` order), then back-filled once
-        // `applyCard` has run its direct debit/credit. `delta` is 0 for cards
-        // with no direct cash impact (plain move, go-to-jail, kept card).
-        const before = cash[seat]
-        const cardEffect: Extract<TurnEffect, { kind: 'card' }> = {
-          kind: 'card',
-          deck,
-          cardId: card.id,
-          balanceBefore: before,
-          delta: 0,
-          balanceAfter: before,
-        }
-        effects.push(cardEffect)
-        resolving = applyCard(card)
-        cardEffect.delta = cash[seat] - before
-        cardEffect.balanceAfter = cash[seat]
-        break
-      }
-      case 'luckyClub': {
-        // The Lucky Club charges a flat entry fee.
-        const fee = tile.amount ?? 0
-        if (!canAfford(seat, fee, cash)) bankrupt()
-        else {
-          effects.push({ kind: 'cash', seat, delta: -fee, reason: 'club' })
-          cash[seat] -= fee
-        }
-        resolving = false
-        break
-      }
-      case 'fastbus':
-        // Catch the Fast Bus — the seat's next roll will be doubled.
-        effects.push({ kind: 'fastBus', seat })
-        resolving = false
-        break
-      default:
-        // start / jail (just visiting) — no action.
-        resolving = false
-    }
-  }
+  // 2) Resolve the landed tile, chaining through cards (only when the seat moved
+  //    — a jail stay / third double resolves nothing). A `choice` cell pauses.
+  resolveChain(w, moved)
 
-  // 3) Buy option from the *final* tile (unowned + affordable; never while
-  //    bankrupt this turn, sent to jail, or staying in jail).
-  let buyOption: { tile: number; price: number } | null = null
-  if (!bankrupted && !wentToJail && !skipMovement) {
-    const tile = BOARD[currentTile]
-    if (tile.kind === 'property' && ownership[currentTile] == null) {
-      const price = tile.price ?? Infinity
-      if (canAfford(seat, price, cash)) buyOption = { tile: currentTile, price }
-    }
-  }
+  const buyOption = computeBuyOption(w)
+  const { isWin, winnerId } = computeWin(w)
 
-  // 4) Win detection: a bankruptcy that leaves exactly one active player ends it.
-  let isWin = false
-  let winnerId: number | null = null
-  if (bankrupted) {
-    const remaining = state.players.filter((p) => p.status === 'active' && p.id !== seat).map((p) => p.id)
-    if (remaining.length === 1) {
-      isWin = true
-      winnerId = remaining[0]
-    }
-  }
-
-  // 5) Doubles grant another turn — unless it's the third in a row, or the move
-  //    finished the game / sent the seat to jail (a jail-origin roll never chains).
-  const extraTurn = doublesCount >= 1 && doublesCount < 3 && !wentToJail && !bankrupted && !isWin
+  // Doubles grant another turn — unless the third in a row, or the move finished
+  // the game / went to jail. A choice-pause keeps the chain alive in the reducer.
+  const extraTurn = doublesCount >= 1 && doublesCount < 3 && !w.wentToJail && !w.bankrupted && !isWin
 
   return {
     type: 'roll',
     seat,
     dice,
     usedFastBus,
-    effects,
-    finalTile: currentTile,
+    effects: w.effects,
+    finalTile: w.currentTile,
+    buyOption,
+    isWin,
+    winnerId,
+    extraTurn,
+    doublesCount,
+    cardChoice: w.choiceTile != null ? { tile: w.choiceTile } : null,
+  }
+}
+
+/**
+ * Resolve a player's chosen-deck draw on a "Luck or Court" cell — the second
+ * half of a turn that paused via {@link resolveTurn}'s `cardChoice`. The seat is
+ * already committed standing on the choice cell; this draws from `deck`, applies
+ * the card, and resolves any chain (the same tail as a roll). The doubles chain
+ * carried on the state grants the extra turn unless the card jails/bankrupts/wins.
+ */
+export function resolveCardDraw(state: BankGameState, deck: CardDeck, rng: Rng = Math.random): BankTurnResolution {
+  const seat = state.currentPlayerIndex
+  const w = newWork(state, rng)
+  // The seat stands on the choice cell — draw from the chosen deck, then chain.
+  resolveChain(w, true, deck)
+
+  const buyOption = computeBuyOption(w)
+  const { isWin, winnerId } = computeWin(w)
+  const hadDoubles = state.consecutiveDoubles > 0
+  const extraTurn = hadDoubles && !w.wentToJail && !w.bankrupted && !isWin
+  const doublesCount = extraTurn ? state.consecutiveDoubles : 0
+
+  return {
+    type: 'cardDraw',
+    seat,
+    deck,
+    effects: w.effects,
+    finalTile: w.currentTile,
     buyOption,
     isWin,
     winnerId,
