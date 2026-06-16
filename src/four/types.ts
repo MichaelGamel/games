@@ -10,6 +10,14 @@ export type { MatchDecision }
 export type Cell = [row: number, col: number]
 
 /**
+ * Computer-opponent strength (local play only).
+ * - `easy`   — takes obvious wins, often misses blocks, otherwise random.
+ * - `medium` — the classic heuristic: win, block, avoid gifting, play center-out.
+ * - `hard`   — a deep alpha-beta search; plays at a near-professional level.
+ */
+export type FourBotLevel = 'easy' | 'medium' | 'hard'
+
+/**
  * Finite phases of a game.
  * - `setup`    — choosing players, board hidden
  * - `idle`     — waiting for the current player to pick a column
@@ -28,6 +36,8 @@ export interface FourPlayer {
   color: string
   /** Computer-controlled player (local play only). Carried data, never a rule. */
   isBot: boolean
+  /** Bot strength when `isBot` (local play only). Defaults to `medium`. */
+  botLevel?: FourBotLevel
 }
 
 export interface FourState {

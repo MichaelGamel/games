@@ -2,11 +2,25 @@
  * Single source of truth for every Connect Four tunable. Mirrors the role of
  * `game/config.ts` (Snakes) and `ludo/config.ts`.
  */
+import type { FourBotLevel } from './types'
 
 export const COLS = 7
 export const ROWS = 6
 /** Discs in a row needed to win. */
 export const WIN_LENGTH = 4
+
+/** Selectable computer-opponent levels, in display order (local play only). */
+export const FOUR_BOT_LEVELS: readonly FourBotLevel[] = ['easy', 'medium', 'hard']
+
+/** Pre-selected level when a seat is switched to the computer. */
+export const DEFAULT_BOT_LEVEL: FourBotLevel = 'medium'
+
+/**
+ * Search depth (plies looked ahead) for the `hard` bot's alpha-beta engine.
+ * Connect Four's branching factor is ≤ 7, so with center-first move ordering
+ * this depth resolves in a few milliseconds yet plays a near-perfect game.
+ */
+export const HARD_SEARCH_DEPTH = 9
 
 /** Connect Four is strictly head-to-head. */
 export const FOUR_MAX_PLAYERS = 2

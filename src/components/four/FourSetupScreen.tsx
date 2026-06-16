@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { m } from 'motion/react'
 import { useTranslation } from 'react-i18next'
-import { DEFAULT_FOUR_PLAYERS, FOUR_COLORS } from '../../four/config'
+import { DEFAULT_BOT_LEVEL, DEFAULT_FOUR_PLAYERS, FOUR_BOT_LEVELS, FOUR_COLORS } from '../../four/config'
+import type { FourBotLevel } from '../../four/types'
 import type { PlayerSetup } from '../../four/fourReducer'
 import { cn } from '../../lib/cn'
 
@@ -38,7 +39,7 @@ export function FourSetupScreen({ onStart, onBack }: FourSetupScreenProps) {
         let name = p.name
         if (isBot && name.trim() === human) name = bot
         else if (!isBot && name.trim() === bot) name = human
-        return { ...p, isBot, name }
+        return { ...p, isBot, name, botLevel: p.botLevel ?? DEFAULT_BOT_LEVEL }
       }),
     )
 
@@ -48,8 +49,15 @@ export function FourSetupScreen({ onStart, onBack }: FourSetupScreenProps) {
         name: p.name.trim() || (p.isBot ? `Computer ${i + 1}` : `Player ${i + 1}`),
         color: p.color,
         isBot: p.isBot ?? false,
+        botLevel: p.botLevel ?? DEFAULT_BOT_LEVEL,
       })),
     )
+
+  const levelLabel: Record<FourBotLevel, string> = {
+    easy: t('common:setup.botEasy'),
+    medium: t('common:setup.botMedium'),
+    hard: t('common:setup.botHard'),
+  }
 
   return (
     <m.div
@@ -167,6 +175,35 @@ export function FourSetupScreen({ onStart, onBack }: FourSetupScreenProps) {
                 })}
               </div>
             </div>
+
+            {p.isBot && (
+              <div className="mt-4">
+                <p className="mb-2 text-xs uppercase tracking-wide text-white/50">
+                  {t('common:setup.difficulty')}
+                </p>
+                <div className="flex gap-2">
+                  {FOUR_BOT_LEVELS.map((lvl) => {
+                    const selected = (p.botLevel ?? DEFAULT_BOT_LEVEL) === lvl
+                    return (
+                      <button
+                        key={lvl}
+                        type="button"
+                        onClick={() => update(index, { botLevel: lvl })}
+                        aria-pressed={selected}
+                        className={cn(
+                          'flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold ring-1 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-white',
+                          selected
+                            ? 'bg-linear-to-r from-grape to-grape-light text-white ring-white/20'
+                            : 'bg-night-900/60 text-white/70 ring-white/15 hover:bg-white/10 hover:text-white',
+                        )}
+                      >
+                        {levelLabel[lvl]}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         ))}
       </m.div>

@@ -17,7 +17,14 @@ export function FourLocalGame({ onExit }: { onExit: () => void }) {
   useRecordMatch('four', game.phase, game.players, game.winnerId)
 
   const playAgain = () =>
-    game.startGame(game.players.map((p) => ({ name: p.name, color: p.color, isBot: p.isBot })))
+    game.startGame(
+      game.players.map((p) => ({
+        name: p.name,
+        color: p.color,
+        isBot: p.isBot,
+        botLevel: p.botLevel,
+      })),
+    )
 
   return (
     <>

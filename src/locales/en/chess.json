@@ -1,6 +1,7 @@
 {
   "title": "Chess",
   "tagline": "A living 3D board. Outwit the machine.",
+  "setupSubtitle": "Choose colours and your opponent, then enter the board.",
   "hubTagline": "Sculpted 3D pieces — face the computer or a friend.",
   "metaTitle": "Chess — Robin's Games",
   "metaDescription": "Play chess on Robin's Games — a fully 3D, animated board with sculpted pieces. Challenge the computer at three levels or play a friend on one screen.",
@@ -11,6 +12,8 @@
     "passSubtitle": "Share one screen and trade blows in 3D.",
     "online": "Play Online",
     "onlineSubtitle": "Create or join a room and play a friend on another computer.",
+    "localSubtitle": "Pick your colours and opponent — play on one screen.",
+    "opponent": "Opponent",
     "difficulty": "Difficulty",
     "pieceColors": "Piece colours",
     "start": "Enter the Board ▶"

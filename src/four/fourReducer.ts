@@ -5,13 +5,15 @@
  */
 import { FOUR_MAX_PLAYERS } from './config'
 import { EMPTY, emptyBoard } from './rules'
-import type { Cell, FourPlayer, FourResolution, FourState } from './types'
+import type { Cell, FourBotLevel, FourPlayer, FourResolution, FourState } from './types'
 
 export interface PlayerSetup {
   name: string
   color: string
   /** Computer-controlled player (local play only). Defaults to false. */
   isBot?: boolean
+  /** Bot strength when `isBot` (local play only). Defaults to `medium`. */
+  botLevel?: FourBotLevel
 }
 
 /** A seated player in a running-match snapshot (adds their discs). */
@@ -59,6 +61,7 @@ export function fourReducer(state: FourState, action: FourAction): FourState {
         name: p.name,
         color: p.color,
         isBot: p.isBot ?? false,
+        botLevel: p.botLevel ?? 'medium',
       }))
       return { ...initialFourState, players, board: emptyBoard(), phase: 'idle' }
     }

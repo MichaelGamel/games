@@ -13,12 +13,13 @@ export function useFourBotAutoPlay(game: FourController): void {
   const reduced = useReducedMotion()
   const { phase, currentPlayerIndex, turnCount, drop, board } = game
   const currentIsBot = game.currentPlayer?.isBot ?? false
+  const botLevel = game.currentPlayer?.botLevel ?? 'medium'
 
   useEffect(() => {
     if (phase !== 'idle' || !currentIsBot) return
-    const column = chooseFourMove(board, currentPlayerIndex, (currentPlayerIndex + 1) % 2)
+    const column = chooseFourMove(board, currentPlayerIndex, (currentPlayerIndex + 1) % 2, botLevel)
     const timer = setTimeout(() => void drop(column), reduced ? 200 : TIMING.botThinkMs)
     return () => clearTimeout(timer)
     // `turnCount` re-arms the timer for the bot's next turn.
-  }, [phase, currentPlayerIndex, turnCount, currentIsBot, reduced, drop, board])
+  }, [phase, currentPlayerIndex, turnCount, currentIsBot, botLevel, reduced, drop, board])
 }
