@@ -5,17 +5,30 @@ import { cn } from '../lib/cn'
 interface BackToHubLinkProps {
   /** Extra classes (e.g. positioning) merged onto the link. */
   className?: string
+  /**
+   * If set, the click is intercepted (no navigation) and this is called
+   * instead — e.g. to confirm before abandoning a live match.
+   */
+  onIntercept?: () => void
 }
 
 /**
  * A small "← Robin's Games" pill that returns to the hub. Shared by every game
  * shell so the back-affordance looks and behaves identically across games.
  */
-export function BackToHubLink({ className }: BackToHubLinkProps) {
+export function BackToHubLink({ className, onIntercept }: BackToHubLinkProps) {
   const { t } = useTranslation()
   return (
     <Link
       to="/"
+      onClick={
+        onIntercept
+          ? (e) => {
+              e.preventDefault()
+              onIntercept()
+            }
+          : undefined
+      }
       className={cn(
         'absolute start-4 top-4 z-20 inline-flex items-center gap-1.5 rounded-full bg-white/5 px-4 py-2 text-sm font-medium text-white/70 ring-1 ring-white/10 backdrop-blur transition',
         'hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white',

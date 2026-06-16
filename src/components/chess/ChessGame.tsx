@@ -6,10 +6,12 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useRecordMatch } from '../../hooks/useRecordMatch'
+import { useMatchExitGuard } from '../../hooks/useMatchExitGuard'
 import { useChessGame, type ChessPlayerSetup } from '../../hooks/useChessGame'
 import { DEFAULT_PIECE_COLORS } from '../../chess/config'
 import type { ChessMode, Difficulty } from '../../chess/types'
 import { ChessBoardView } from './ChessBoardView'
+import { ConfirmLeaveDialog } from '../ConfirmLeaveDialog'
 
 interface ChessGameProps {
   mode: Extract<ChessMode, 'solo' | 'pass'>
@@ -45,5 +47,19 @@ export function ChessGame({
   const c = useChessGame({ mode, difficulty, localPlayers })
   useRecordMatch('chess', c.phase, c.players, c.winnerId)
 
-  return <ChessBoardView c={c} onExit={onExit} />
+  // Don't let an in-progress match be abandoned by accident — the Back button,
+  // the hub link, a refresh or a tab close all confirm first.
+  const matchInProgress = c.phase !== 'setup' && c.phase !== 'won'
+  const { confirming, requestLeave, cancelLeave, confirmLeave } = useMatchExitGuard(matchInProgress)
+
+  return (
+    <>
+      <ChessBoardView
+        c={c}
+        onExit={onExit}
+        onRequestLeave={matchInProgress ? requestLeave : undefined}
+      />
+      <ConfirmLeaveDialog open={confirming} onConfirm={confirmLeave} onCancel={cancelLeave} />
+    </>
+  )
 }

@@ -33,9 +33,14 @@ interface ChessBoardViewProps {
   c: ChessController
   online?: ChessOnlineContext
   onExit: () => void
+  /**
+   * Local play only: intercept the hub link to confirm before abandoning a live
+   * match. When omitted the link navigates straight to the hub.
+   */
+  onRequestLeave?: () => void
 }
 
-export function ChessBoardView({ c, online, onExit }: ChessBoardViewProps) {
+export function ChessBoardView({ c, online, onExit, onRequestLeave }: ChessBoardViewProps) {
   const { t } = useTranslation(['chess', 'common'])
   const { attachScene } = c
   const boardRef = useCallback((node: HTMLDivElement | null) => attachScene(node), [attachScene])
@@ -67,7 +72,7 @@ export function ChessBoardView({ c, online, onExit }: ChessBoardViewProps) {
           {t('common:actions.leave')}
         </button>
       ) : (
-        <BackToHubLink />
+        <BackToHubLink onIntercept={onRequestLeave} />
       )}
       <LanguageSwitcher className="absolute end-4 top-4 z-20" />
 
