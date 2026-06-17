@@ -1,0 +1,41 @@
+{
+  "title": "Dominoes",
+  "tagline": "Match the ends, empty your hand.",
+  "hubTagline": "Classic draw dominoes",
+  "setupSubtitle": "2–4 players • double-six set • draw from the boneyard when stuck",
+  "metaTitle": "Dominoes — Robin's Games",
+  "metaDescription": "Play classic Draw Dominoes online or pass-and-play: match the open ends, draw from the boneyard, and be first to empty your hand. 2–4 players, with bots.",
+  "secrecyNote": "Tiles are hidden by determinism, not a server — both players shuffle the same set from one seed.",
+  "seatColor": "Seat color",
+  "privateHands": "Private hands",
+  "privateHandsHint": "Show a tap-to-reveal screen between turns so the next player can't see your tiles.",
+  "menu": {
+    "localSubtitle": "Pass & play on one device, or against bots",
+    "onlineSubtitle": "Play with friends across devices",
+    "onlineComingSoon": "Coming soon"
+  },
+  "status": {
+    "yourTurn": "Your turn — lay a tile",
+    "youDraw": "No move — draw from the boneyard",
+    "youPass": "No tiles left to draw — you must pass",
+    "turn": "{{name}}'s turn",
+    "drawing": "{{name}} is drawing…",
+    "playing": "{{name}} is playing…"
+  },
+  "openEnds": "Ends: {{left}} · {{right}}",
+  "pass": "Pass",
+  "drawTile": "Draw a tile",
+  "tapToDraw": "Draw",
+  "boneyardCount": "{{n}} in boneyard",
+  "chooseEnd": "Which end?",
+  "leftEnd": "Left end",
+  "rightEnd": "Right end",
+  "emptyLineHint": "Lay the first bone to start the line",
+  "lastTile": "1 tile!",
+  "tileCount": "{{n}} tiles",
+  "passTo": "Pass to {{name}}",
+  "passHint": "Make sure only you can see the screen.",
+  "tapWhenReady": "Tap when ready",
+  "wonBlocked": "Won on fewest pips ({{pips}}) — the board was blocked.",
+  "tieSubtitle": "Blocked board — tied on fewest pips."
+}

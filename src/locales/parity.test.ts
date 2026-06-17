@@ -12,6 +12,7 @@ import enUno from './en/uno.json'
 import enBank from './en/bank.json'
 import enXO from './en/xo.json'
 import enChess from './en/chess.json'
+import enDomino from './en/domino.json'
 import arCommon from './ar/common.json'
 import arOnline from './ar/online.json'
 import arSnakes from './ar/snakes.json'
@@ -21,6 +22,7 @@ import arUno from './ar/uno.json'
 import arBank from './ar/bank.json'
 import arXO from './ar/xo.json'
 import arChess from './ar/chess.json'
+import arDomino from './ar/domino.json'
 
 const allKeys = (obj: unknown, prefix = ''): string[] =>
   Object.entries(obj as Record<string, unknown>).flatMap(([k, v]) =>
@@ -42,6 +44,7 @@ const NAMESPACES: Array<[string, unknown, unknown]> = [
   ['bank', enBank, arBank],
   ['xo', enXO, arXO],
   ['chess', enChess, arChess],
+  ['domino', enDomino, arDomino],
 ]
 
 describe('locale key parity (en ↔ ar)', () => {

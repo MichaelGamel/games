@@ -196,6 +196,20 @@ export class SoundEngine {
     this.blip(360, 0.03, 0.08, 'triangle', 0.18)
   }
 
+  /** Solid wooden "clack" as a domino bone is laid onto the line. */
+  playTilePlace(): void {
+    if (this.muted || !this.ensure()) return
+    this.blip(240, 0, 0.06, 'square', 0.22)
+    this.blip(150, 0.02, 0.1, 'triangle', 0.2)
+  }
+
+  /** A double knuckle-rap on the table — a player knocks/passes. */
+  playKnock(): void {
+    if (this.muted || !this.ensure()) return
+    this.blip(180, 0, 0.05, 'square', 0.2)
+    this.blip(170, 0.13, 0.06, 'square', 0.18)
+  }
+
   /** Soft "slide" as a card is drawn off the deck. */
   playDraw(): void {
     if (this.muted || !this.ensure()) return
