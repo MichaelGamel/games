@@ -11,6 +11,7 @@ import { DominoGameScreen } from './DominoGameScreen'
 import { DominoEndChoiceOverlay } from './DominoEndChoiceOverlay'
 import { PassDeviceScreen } from './PassDeviceScreen'
 import { dominoWinnerInfo } from './winnerInfo'
+import type { DominoTableStyle } from './tableStyle'
 
 /** Local "pass & play": all players share one screen and device, with an
  *  optional privacy hand-off between turns so hidden hands stay hidden. */
@@ -18,6 +19,7 @@ export function DominoLocalGame({ onExit }: { onExit: () => void }) {
   const { t } = useTranslation(['domino', 'common'])
   const game = useDomino({ controlsPlayer: 'all' })
   const [privateHands, setPrivateHands] = useState(true)
+  const [tableStyle, setTableStyle] = useState<DominoTableStyle>('classic')
   // Which seat has revealed its hand this turn (the privacy hand-off gate). It
   // re-arms whenever the turn passes to a new seat — tracked during render.
   const [revealedSeat, setRevealedSeat] = useState<number | null>(null)
@@ -48,8 +50,9 @@ export function DominoLocalGame({ onExit }: { onExit: () => void }) {
   // The end-choice prompt only belongs to a human (bots auto-resolve theirs).
   const showChoice = game.choice != null && current != null && !current.isBot && !needsPass
 
-  const start = (players: Parameters<typeof game.startGame>[0], isPrivate: boolean) => {
+  const start = (players: Parameters<typeof game.startGame>[0], isPrivate: boolean, style: DominoTableStyle) => {
     setPrivateHands(isPrivate)
+    setTableStyle(style)
     setRevealedSeat(null)
     game.startGame(players)
   }
@@ -65,7 +68,7 @@ export function DominoLocalGame({ onExit }: { onExit: () => void }) {
     <>
       <AnimatePresence mode="wait">
         {game.phase === 'setup' ? (
-          <DominoSetupScreen key="setup" onStart={(players, priv) => start(players, priv)} onBack={onExit} />
+          <DominoSetupScreen key="setup" onStart={(players, priv, style) => start(players, priv, style)} onBack={onExit} />
         ) : (
           <DominoGameScreen
             key="game"
@@ -73,6 +76,7 @@ export function DominoLocalGame({ onExit }: { onExit: () => void }) {
             viewerSeat={game.currentPlayerIndex}
             secondaryLabel={t('common:actions.newGame')}
             onSecondary={game.reset}
+            tableStyle={tableStyle}
           />
         )}
       </AnimatePresence>
@@ -106,6 +110,7 @@ export function DominoLocalGame({ onExit }: { onExit: () => void }) {
               start(
                 game.players.map((p) => ({ name: p.name, color: p.color, isBot: p.isBot, botLevel: p.botLevel })),
                 privateHands,
+                tableStyle,
               )
             }
             onSecondary={game.reset}

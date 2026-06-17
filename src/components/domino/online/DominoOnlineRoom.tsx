@@ -23,6 +23,7 @@ import type {
 import { DominoGameScreen } from '../DominoGameScreen'
 import { DominoEndChoiceOverlay } from '../DominoEndChoiceOverlay'
 import { dominoWinnerInfo } from '../winnerInfo'
+import { loadTableStyle } from '../tableStyle'
 import { ConfirmLeaveDialog } from '../../ConfirmLeaveDialog'
 import { WinnerOverlay } from '../../WinnerOverlay'
 import { ReactionBar, ReactionLayer } from '../../online/Reactions'
@@ -67,6 +68,9 @@ export function DominoOnlineRoom({ code, role, profile, onLeave }: DominoOnlineR
   const { t } = useTranslation(['domino', 'common', 'online'])
   const { confirming, requestLeave, cancelLeave, confirmLeave } = useLeaveConfirm(onLeave)
   const [seat, setSeat] = useState<number | null>(null)
+  // Table style is a per-client visual preference (set on the local setup
+  // screen); online has no setup screen, so it follows the saved choice.
+  const [tableStyle] = useState(loadTableStyle)
   const matchRef = useRef<OnlineMatch<DominoTurnResolution> | null>(null)
 
   const game = useDomino({
@@ -172,6 +176,7 @@ export function DominoOnlineRoom({ code, role, profile, onLeave }: DominoOnlineR
         viewerSeat={seat ?? -1}
         secondaryLabel={t('common:actions.leave')}
         onSecondary={requestLeave}
+        tableStyle={tableStyle}
         online={{
           roomCode: code,
           everyonePresent: match.everyonePresent,

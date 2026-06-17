@@ -10,9 +10,10 @@ import {
 import type { PlayerSetup } from '../../domino/dominoReducer'
 import { cn } from '../../lib/cn'
 import { DominoIcon } from './DominoIcon'
+import { loadTableStyle, saveTableStyle, type DominoTableStyle } from './tableStyle'
 
 interface DominoSetupScreenProps {
-  onStart: (players: PlayerSetup[], privateHands: boolean) => void
+  onStart: (players: PlayerSetup[], privateHands: boolean, tableStyle: DominoTableStyle) => void
   onBack?: () => void
 }
 
@@ -28,6 +29,7 @@ export function DominoSetupScreen({ onStart, onBack }: DominoSetupScreenProps) {
   const { t } = useTranslation(['domino', 'common'])
   const [players, setPlayers] = useState<PlayerSetup[]>(() => DEFAULT_DOMINO_PLAYERS.map((p) => ({ ...p })))
   const [privateHands, setPrivateHands] = useState(true)
+  const [tableStyle, setTableStyle] = useState<DominoTableStyle>(loadTableStyle)
 
   const update = (index: number, patch: Partial<PlayerSetup>) =>
     setPlayers((prev) => prev.map((p, i) => (i === index ? { ...p, ...patch } : p)))
@@ -56,7 +58,8 @@ export function DominoSetupScreen({ onStart, onBack }: DominoSetupScreenProps) {
   const removePlayer = (index: number) =>
     setPlayers((prev) => (prev.length > DOMINO_MIN_PLAYERS ? prev.filter((_, i) => i !== index) : prev))
 
-  const handleStart = () =>
+  const handleStart = () => {
+    saveTableStyle(tableStyle)
     onStart(
       players.map((p, i) => ({
         name: p.name.trim() || (p.isBot ? `Computer ${i + 1}` : `Player ${i + 1}`),
@@ -65,7 +68,9 @@ export function DominoSetupScreen({ onStart, onBack }: DominoSetupScreenProps) {
         botLevel: p.botLevel,
       })),
       privateHands,
+      tableStyle,
     )
+  }
 
   return (
     <m.div
@@ -254,6 +259,45 @@ export function DominoSetupScreen({ onStart, onBack }: DominoSetupScreenProps) {
           />
         </button>
       </m.label>
+
+      <m.div
+        variants={item}
+        className="flex w-full max-w-3xl flex-col gap-3 rounded-2xl bg-white/5 px-5 py-4 ring-1 ring-white/10 backdrop-blur sm:flex-row sm:items-center sm:justify-between"
+      >
+        <span>
+          <span className="text-sm font-semibold text-white">{t('tableStyle')}</span>
+          <span className="mt-0.5 block text-xs text-white/50">{t('tableStyleHint')}</span>
+        </span>
+        <div className="flex shrink-0 gap-2" role="group" aria-label={t('tableStyle')}>
+          {[
+            { value: 'classic' as const, label: t('tableClassic') },
+            { value: '3d' as const, label: t('table3d'), badge: t('tableNewBadge') },
+          ].map((opt) => {
+            const selected = tableStyle === opt.value
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setTableStyle(opt.value)}
+                aria-pressed={selected}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold ring-1 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-white',
+                  selected
+                    ? 'bg-linear-to-r from-stone-500 to-amber-500 text-white ring-white/20'
+                    : 'bg-night-900/60 text-white/70 ring-white/15 hover:bg-white/10 hover:text-white',
+                )}
+              >
+                {opt.label}
+                {opt.badge && (
+                  <span className="rounded-full bg-white/25 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                    {opt.badge}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </m.div>
 
       <m.button
         variants={item}

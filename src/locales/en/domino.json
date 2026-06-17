@@ -9,6 +9,11 @@
   "seatColor": "Seat color",
   "privateHands": "Private hands",
   "privateHandsHint": "Show a tap-to-reveal screen between turns so the next player can't see your tiles.",
+  "tableStyle": "Table style",
+  "tableStyleHint": "Classic flat board, or an animated 3D table.",
+  "tableClassic": "Classic",
+  "table3d": "3D table",
+  "tableNewBadge": "New",
   "menu": {
     "localSubtitle": "Pass & play on one device, or against bots",
     "onlineSubtitle": "Play with friends across devices",

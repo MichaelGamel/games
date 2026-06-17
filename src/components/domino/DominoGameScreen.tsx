@@ -10,6 +10,8 @@ import { DominoIcon } from './DominoIcon'
 import { DominoBoard } from './board/DominoBoard'
 import { DominoHand } from './board/DominoHand'
 import { Boneyard } from './board/Boneyard'
+import { DominoTable3D } from './board/three/DominoTable3D'
+import type { DominoTableStyle } from './tableStyle'
 import { cn } from '../../lib/cn'
 
 interface DominoGameScreenProps {
@@ -18,12 +20,21 @@ interface DominoGameScreenProps {
   viewerSeat: number
   secondaryLabel: string
   onSecondary: () => void
+  /** Render the classic 2D board (default) or the 3D Three.js table. */
+  tableStyle?: DominoTableStyle
   /** Online room metadata — drives the connection badge and the canPlay gate. */
   online?: OnlineMeta
 }
 
 /** The in-match Dominoes screen: roster, the line, the boneyard, your hand. */
-export function DominoGameScreen({ game, viewerSeat, secondaryLabel, onSecondary, online }: DominoGameScreenProps) {
+export function DominoGameScreen({
+  game,
+  viewerSeat,
+  secondaryLabel,
+  onSecondary,
+  tableStyle = 'classic',
+  online,
+}: DominoGameScreenProps) {
   const { t } = useTranslation(['domino', 'common'])
   const handCounts = game.hands.map((h) => h.length)
   const canPlayRoom = online?.canPlay ?? true
@@ -36,6 +47,7 @@ export function DominoGameScreen({ game, viewerSeat, secondaryLabel, onSecondary
     [canAct, game.legalEndsById],
   )
   const myId = game.controlsPlayer === 'all' ? null : game.controlsPlayer
+  const status = statusText(game, viewerSeat, t, canPlayRoom)
 
   return (
     <m.div
@@ -43,7 +55,10 @@ export function DominoGameScreen({ game, viewerSeat, secondaryLabel, onSecondary
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="relative z-10 mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-3 px-3 pb-3 pt-3 lg:px-4 lg:py-6"
+      className={cn(
+        'relative z-10 mx-auto flex min-h-screen w-full flex-col px-2 pb-2 pt-3 lg:px-4',
+        tableStyle === '3d' ? 'max-w-6xl gap-2 lg:py-4' : 'max-w-5xl gap-3 lg:py-6',
+      )}
     >
       <LanguageSwitcher compact className="fixed end-3 top-3 z-30" />
 
@@ -65,52 +80,113 @@ export function DominoGameScreen({ game, viewerSeat, secondaryLabel, onSecondary
         />
       </div>
 
-      {/* Central table: the boneyard + the laid line */}
-      <div className="flex flex-1 flex-col items-stretch gap-2">
-        <div className="flex flex-1 items-stretch gap-3">
-          <div className="flex shrink-0 flex-col items-center justify-center gap-2">
-            <Boneyard count={game.boneyard.length} canDraw={canAct && game.canDraw} onDraw={game.drawOrPass} />
-            <EndChip leftEnd={game.line.leftEnd} rightEnd={game.line.rightEnd} t={t} />
-          </div>
-          <DominoBoard line={game.line} />
-        </div>
+      {tableStyle === '3d' ? (
+        /* ---- 3D table: line + boneyard + hand in one canvas ---- */
+        <div className="relative min-h-[360px] flex-1 overflow-hidden rounded-3xl shadow-2xl ring-1 ring-white/10">
+          <DominoTable3D
+            className="absolute inset-0"
+            line={game.line}
+            handTiles={game.hands[viewerSeat] ?? []}
+            legalIds={legalIds}
+            active={canAct}
+            faceDown={viewerIsBot}
+            boneyardCount={game.boneyard.length}
+            canDraw={canAct && game.canDraw}
+            highlightEnds={canAct}
+            onPlay={(tileId) => void game.play(tileId)}
+            onDraw={game.drawOrPass}
+          />
 
-        <div className="flex min-h-9 items-center justify-center gap-3" role="status" aria-live="polite">
-          <AnimatePresence mode="wait">
-            <m.p
-              key={`${game.phase}-${game.currentPlayerIndex}-${game.turnCount}`}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="text-center text-xs text-white/65 sm:text-sm"
-            >
-              {statusText(game, viewerSeat, t, canPlayRoom)}
-            </m.p>
-          </AnimatePresence>
-          {canAct && game.mustPass && (
-            <m.button
-              type="button"
-              onClick={game.drawOrPass}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.96 }}
-              className="rounded-lg bg-linear-to-r from-stone-500 to-amber-500 px-4 py-1.5 text-sm font-bold text-white shadow ring-1 ring-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
-            >
-              {t('pass')}
-            </m.button>
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-linear-to-b from-black/35 to-transparent" />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-linear-to-t from-black/45 to-transparent" />
+
+          {game.line.leftEnd != null && game.line.rightEnd != null && (
+            <span className="pointer-events-none absolute start-3 top-3 rounded-full bg-black/35 px-3 py-1 text-[11px] font-semibold text-white/85 ring-1 ring-white/15 backdrop-blur tabular-nums">
+              {t('openEnds', { left: game.line.leftEnd, right: game.line.rightEnd })}
+            </span>
           )}
-        </div>
-      </div>
+          <span className="pointer-events-none absolute end-3 top-3 rounded-full bg-black/35 px-3 py-1 text-[11px] font-semibold text-white/80 ring-1 ring-white/15 backdrop-blur tabular-nums">
+            {t('boneyardCount', { n: game.boneyard.length })}
+          </span>
 
-      {/* The viewer's hand */}
-      <div className={cn('shrink-0', !canAct && 'pointer-events-none')}>
-        <DominoHand
-          tiles={game.hands[viewerSeat] ?? []}
-          legalIds={legalIds}
-          active={canAct}
-          faceDown={viewerIsBot}
-          onPlay={(tileId) => void game.play(tileId)}
-        />
-      </div>
+          <div
+            className="pointer-events-none absolute inset-x-0 bottom-3 flex items-center justify-center gap-3 px-3"
+            role="status"
+            aria-live="polite"
+          >
+            <AnimatePresence mode="wait">
+              <m.p
+                key={`${game.phase}-${game.currentPlayerIndex}-${game.turnCount}`}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                className="rounded-full bg-black/40 px-4 py-1.5 text-center text-xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur sm:text-sm"
+              >
+                {status}
+              </m.p>
+            </AnimatePresence>
+            {canAct && game.mustPass && (
+              <m.button
+                type="button"
+                onClick={game.drawOrPass}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.96 }}
+                className="pointer-events-auto rounded-full bg-linear-to-r from-stone-500 to-amber-500 px-5 py-1.5 text-sm font-bold text-white shadow-lg ring-1 ring-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+              >
+                {t('pass')}
+              </m.button>
+            )}
+          </div>
+        </div>
+      ) : (
+        /* ---- Classic 2D board (default) ---- */
+        <>
+          <div className="flex flex-1 flex-col items-stretch gap-2">
+            <div className="flex flex-1 items-stretch gap-3">
+              <div className="flex shrink-0 flex-col items-center justify-center gap-2">
+                <Boneyard count={game.boneyard.length} canDraw={canAct && game.canDraw} onDraw={game.drawOrPass} />
+                <EndChip leftEnd={game.line.leftEnd} rightEnd={game.line.rightEnd} t={t} />
+              </div>
+              <DominoBoard line={game.line} />
+            </div>
+
+            <div className="flex min-h-9 items-center justify-center gap-3" role="status" aria-live="polite">
+              <AnimatePresence mode="wait">
+                <m.p
+                  key={`${game.phase}-${game.currentPlayerIndex}-${game.turnCount}`}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="text-center text-xs text-white/65 sm:text-sm"
+                >
+                  {status}
+                </m.p>
+              </AnimatePresence>
+              {canAct && game.mustPass && (
+                <m.button
+                  type="button"
+                  onClick={game.drawOrPass}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.96 }}
+                  className="rounded-lg bg-linear-to-r from-stone-500 to-amber-500 px-4 py-1.5 text-sm font-bold text-white shadow ring-1 ring-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+                >
+                  {t('pass')}
+                </m.button>
+              )}
+            </div>
+          </div>
+
+          <div className={cn('shrink-0', !canAct && 'pointer-events-none')}>
+            <DominoHand
+              tiles={game.hands[viewerSeat] ?? []}
+              legalIds={legalIds}
+              active={canAct}
+              faceDown={viewerIsBot}
+              onPlay={(tileId) => void game.play(tileId)}
+            />
+          </div>
+        </>
+      )}
 
       <div className="flex shrink-0 items-center justify-between gap-3">
         <button
